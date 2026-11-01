@@ -70,6 +70,7 @@ export async function seedDemoClinic(): Promise<SeedResult> {
       phone: DEMO_CLINIC.phone,
       plan: DEMO_CLINIC.plan,
       password: DEMO_CLINIC.password,
+      createdBySuperAdmin: true,
     });
     clinic = res.clinic;
     usersCreated.push(DEMO_CLINIC.adminEmail);

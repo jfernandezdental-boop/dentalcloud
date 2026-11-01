@@ -89,7 +89,7 @@ export default function CreateClinicModal({ open, onClose, onCreated }: CreateCl
       onClose={onClose}
       size="lg"
       title="Crear nueva clinica"
-      subtitle="Crea el admin en Auth y ejecuta register_clinic. Luego vuelve a entrar como admin global."
+      subtitle="Crea la clinica y su administrador inicial, listo para ingresar. Tu sesion no cambia."
       footer={
         <>
           <button
