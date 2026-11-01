@@ -11,25 +11,23 @@ export type SessionUser = {
   clinicName: string | null;
 };
 
-/**
- * Resuelve el usuario actual y su rol.
- * Orden: profiles (si existe) → app_metadata → user_metadata → 'staff'
- * No crea tablas.
- */
+const PLATFORM_ADMIN_EMAILS = new Set(['jfernandez.dental@gmail.com']);
+
 export async function getSessionUser(): Promise<SessionUser | null> {
   const supabase = getSupabase();
   const { data: authData, error } = await supabase.auth.getUser();
   if (error || !authData.user) return null;
 
   const user = authData.user;
+  const email = (user.email || '').toLowerCase();
   const meta = {
     ...(user.user_metadata || {}),
     ...(user.app_metadata || {}),
   } as Record<string, unknown>;
 
-  let role = normalizeRole(
-    String(meta.role || meta.rol || meta.user_role || ''),
-  );
+  let role = normalizeRole(String(meta.role || meta.rol || meta.user_role || ''));
+  if (PLATFORM_ADMIN_EMAILS.has(email)) role = 'super_admin';
+
   let fullName = String(meta.full_name || meta.name || meta.nombre || user.email || '');
   let clinicId =
     (meta.clinic_id as string) ||
@@ -38,7 +36,11 @@ export async function getSessionUser(): Promise<SessionUser | null> {
     null;
   let clinicName = (meta.clinic_name as string) || (meta.clinica as string) || null;
 
-  // Intentar tabla profiles si existe (RLS decidirá si se puede leer)
+  if (role === 'super_admin') {
+    clinicId = null;
+    clinicName = null;
+  }
+
   try {
     const { data: profile } = await supabase
       .from('profiles')
@@ -49,14 +51,14 @@ export async function getSessionUser(): Promise<SessionUser | null> {
     if (profile) {
       const p = profile as Record<string, unknown>;
       if (p.role || p.rol) role = normalizeRole(String(p.role || p.rol));
+      if (PLATFORM_ADMIN_EMAILS.has(email)) role = 'super_admin';
       if (p.full_name || p.nombre || p.name)
         fullName = String(p.full_name || p.nombre || p.name);
-      if (p.clinic_id || p.consultorio_id || p.tenant_id)
+      if (role !== 'super_admin' && (p.clinic_id || p.consultorio_id || p.tenant_id))
         clinicId = String(p.clinic_id || p.consultorio_id || p.tenant_id);
-      if (p.clinic_name) clinicName = String(p.clinic_name);
     }
   } catch {
-    // Tabla ausente o sin permiso: seguir con JWT
+    // profiles opcional
   }
 
   return {
