@@ -23,6 +23,16 @@ const Ctx = createContext<AuthCtx>({
 
 const PUBLIC = ['/sign-up-login-screen'];
 
+/** Rutas de operación clínica: el super_admin no debe quedarse ahí */
+const CLINIC_OPS = [
+  '/',
+  '/doctor-agenda',
+  '/patient-record',
+  '/interactive-odontogram',
+  '/billing-statements',
+  '/inventory-restock',
+];
+
 export function AuthProvider({ children }: { children: React.ReactNode }) {
   const [user, setUser] = useState<SessionUser | null>(null);
   const [loading, setLoading] = useState(true);
@@ -58,14 +68,23 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   useEffect(() => {
     if (loading) return;
     const isPublic = PUBLIC.some((p) => pathname.startsWith(p));
+
     if (!user && !isPublic) {
       router.replace('/sign-up-login-screen');
       return;
     }
-    if (user && isPublic && pathname.startsWith('/sign-up-login-screen')) {
-      // Ya logueado en pantalla de login → ir a home de su rol
-      // (no forzar si acaba de registrar)
+
+    // Admin global: solo panel plataforma (no inventario / clínica demo)
+    if (user?.role === 'super_admin') {
+      const onClinicOps = CLINIC_OPS.some(
+        (p) => pathname === p || (p !== '/' && pathname.startsWith(p)),
+      );
+      if (onClinicOps || pathname === '/') {
+        router.replace('/global-admin-panel');
+        return;
+      }
     }
+
     if (user && !canAccessPath(user.role, pathname)) {
       router.replace(homeForRole(user.role));
     }
