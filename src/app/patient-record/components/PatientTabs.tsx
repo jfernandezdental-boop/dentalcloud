@@ -1,0 +1,56 @@
+'use client';
+import React, { useState } from 'react';
+import Icon from '@/components/ui/AppIcon';
+import ProfileTab from './tabs/ProfileTab';
+import ClinicalHistoryTab from './tabs/ClinicalHistoryTab';
+import TreatmentHistoryTab from './tabs/TreatmentHistoryTab';
+import BudgetsTab from './tabs/BudgetsTab';
+import PrescriptionsTab from './tabs/PrescriptionsTab';
+import XraysTab from './tabs/XraysTab';
+import PaymentsTab from './tabs/PaymentsTab';
+
+const tabs = [
+  { id: 'pt-profile', key: 'profile', label: 'Datos del paciente', icon: 'IdentificationIcon' },
+  { id: 'pt-hc', key: 'hc', label: 'Historia clínica MSP', icon: 'ClipboardDocumentListIcon' },
+  { id: 'pt-hist', key: 'hist', label: 'Historial', icon: 'ClockIcon' },
+  { id: 'pt-bud', key: 'bud', label: 'Presupuestos', icon: 'DocumentTextIcon' },
+  { id: 'pt-rx', key: 'rx', label: 'Recetario', icon: 'BeakerIcon' },
+  { id: 'pt-img', key: 'img', label: 'Radiografías', icon: 'PhotoIcon' },
+  { id: 'pt-pay', key: 'pay', label: 'Pagos', icon: 'BanknotesIcon' },
+] as const;
+
+type TabKey = (typeof tabs)[number]['key'];
+
+export default function PatientTabs() {
+  const [active, setActive] = useState<TabKey>('profile');
+
+  return (
+    <section className="rounded-2xl border border-border bg-card">
+      <div className="flex gap-1 overflow-x-auto border-b border-border px-3 pt-3 scrollbar-thin" role="tablist">
+        {tabs.map((t) => (
+          <button
+            key={t.id}
+            role="tab"
+            aria-selected={active === t.key}
+            onClick={() => setActive(t.key)}
+            className={`flex shrink-0 items-center gap-2 border-b-2 px-4 py-2.5 text-sm font-semibold transition-all duration-150 ${
+              active === t.key ? 'border-primary text-primary' : 'border-transparent text-muted-foreground hover:text-foreground'
+            }`}
+          >
+            <Icon name={t.icon} size={16} />
+            {t.label}
+          </button>
+        ))}
+      </div>
+      <div className="animate-fade-in p-5" key={`ptab-${active}`}>
+        {active === 'profile' && <ProfileTab />}
+        {active === 'hc' && <ClinicalHistoryTab />}
+        {active === 'hist' && <TreatmentHistoryTab />}
+        {active === 'bud' && <BudgetsTab />}
+        {active === 'rx' && <PrescriptionsTab />}
+        {active === 'img' && <XraysTab />}
+        {active === 'pay' && <PaymentsTab />}
+      </div>
+    </section>
+  );
+}
