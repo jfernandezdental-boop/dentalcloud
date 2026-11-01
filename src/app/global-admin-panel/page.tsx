@@ -6,6 +6,7 @@ import AppLayout from '@/components/AppLayout';
 import AdminHeader from './components/AdminHeader';
 import ClinicsTable from './components/ClinicsTable';
 import RolesMatrix from './components/RolesMatrix';
+import SeedDemoButton from './components/SeedDemoButton';
 import { useAuth } from '@/components/AuthProvider';
 
 export default function GlobalAdminPanelPage() {
@@ -26,7 +27,7 @@ export default function GlobalAdminPanelPage() {
   if (loading || !user || user.role !== 'super_admin') {
     return (
       <div className="flex min-h-screen items-center justify-center text-sm text-muted-foreground">
-        Verificando acceso de administrador global…
+        Verificando acceso de administrador global...
       </div>
     );
   }
@@ -36,9 +37,10 @@ export default function GlobalAdminPanelPage() {
       <div className="space-y-6">
         <AdminHeader />
         <div className="rounded-xl border border-amber-500/30 bg-amber-500/10 px-4 py-3 text-sm">
-          Estás en el <strong>panel de plataforma</strong>. No es el escritorio de una clínica
-          operativa. La clínica demo no se da de alta ni se prioriza aquí.
+          Panel de <strong>plataforma</strong>. La clinica demo se puede crear abajo; no se prioriza
+          en el ranking de tenants.
         </div>
+        <SeedDemoButton />
         <ClinicsTable />
         <div id="usuarios">
           <RolesMatrix />
