@@ -1,4 +1,6 @@
 import { getSupabase } from './client';
+import { getSessionUser } from './session';
+import { homeForRole } from './roles';
 
 export type LoginInput = {
   email: string;
@@ -17,6 +19,20 @@ export type RegisterClinicInput = {
   password: string;
 };
 
+function friendlyAuthError(message: string): string {
+  const m = message.toLowerCase();
+  if (m.includes('invalid login') || m.includes('invalid credentials')) {
+    return 'Correo o contraseña incorrectos. El usuario debe existir en Supabase Auth (no las cuentas demo).';
+  }
+  if (m.includes('email not confirmed')) {
+    return 'Debes confirmar el correo antes de ingresar (revisa la bandeja o desactiva confirmación en Supabase Auth).';
+  }
+  if (m.includes('faltan next_public') || m.includes('dummy')) {
+    return 'Faltan variables NEXT_PUBLIC_SUPABASE_URL / ANON_KEY en el entorno (Vercel o .env.local).';
+  }
+  return message;
+}
+
 /** Login con Supabase Auth */
 export async function signInWithPassword({ email, password }: LoginInput) {
   const supabase = getSupabase();
@@ -24,8 +40,16 @@ export async function signInWithPassword({ email, password }: LoginInput) {
     email: email.trim().toLowerCase(),
     password,
   });
-  if (error) throw error;
+  if (error) throw new Error(friendlyAuthError(error.message));
   return data;
+}
+
+/** Tras login: usuario + ruta home según rol */
+export async function signInAndResolveHome(input: LoginInput) {
+  await signInWithPassword(input);
+  const user = await getSessionUser();
+  const href = user ? homeForRole(user.role) : '/';
+  return { user, href };
 }
 
 export async function signOut() {
@@ -41,13 +65,6 @@ export async function getSession() {
   return data.session;
 }
 
-/**
- * Registro de clínica:
- * 1) signUp del admin
- * 2) RPC register_clinic (ya existe en Supabase; no crea tablas)
- *
- * Si los nombres de argumentos de register_clinic difieren, se ajustan aquí.
- */
 export async function registerClinic(input: RegisterClinicInput) {
   const supabase = getSupabase();
 
@@ -61,7 +78,7 @@ export async function registerClinic(input: RegisterClinicInput) {
       },
     },
   });
-  if (signUpError) throw signUpError;
+  if (signUpError) throw new Error(friendlyAuthError(signUpError.message));
 
   const { data, error } = await supabase.rpc('register_clinic', {
     p_clinic_name: input.clinicName.trim(),
@@ -75,6 +92,11 @@ export async function registerClinic(input: RegisterClinicInput) {
     p_user_id: signUpData.user?.id ?? null,
   });
 
-  if (error) throw error;
+  if (error) {
+    throw new Error(
+      error.message +
+        ' — Si falla register_clinic, revisa los nombres de argumentos de la función en Supabase (no se modifican tablas desde el front).',
+    );
+  }
   return { user: signUpData.user, clinic: data };
 }
