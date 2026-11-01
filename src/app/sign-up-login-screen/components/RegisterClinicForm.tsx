@@ -121,7 +121,13 @@ export default function RegisterClinicForm({ onDone }: RegisterClinicFormProps) 
               RUC
               <RequiredMark />
             </label>
-            <input id="ruc" className={inputClass(!!errors.ruc)} {...ariaFor('ruc', !!errors.ruc)} {...register('ruc', rules.ruc)} />
+            <input
+              id="ruc"
+              className={inputClass(!!errors.ruc)}
+              {...ariaFor('ruc', !!errors.ruc)}
+              {...register('ruc', rules.ruc())}
+              placeholder="13 digitos o 10"
+            />
             <FieldError id="ruc" message={errors.ruc?.message} />
           </div>
           <div>
@@ -169,9 +175,11 @@ export default function RegisterClinicForm({ onDone }: RegisterClinicFormProps) 
           <input
             id="adminEmail"
             type="email"
+            autoComplete="email"
             className={inputClass(!!errors.adminEmail)}
             {...ariaFor('adminEmail', !!errors.adminEmail)}
-            {...register('adminEmail', rules.email)}
+            {...register('adminEmail', rules.email())}
+            placeholder="nombre@gmail.com"
           />
           <FieldError id="adminEmail" message={errors.adminEmail?.message} />
         </div>
@@ -187,7 +195,7 @@ export default function RegisterClinicForm({ onDone }: RegisterClinicFormProps) 
               type="password"
               className={inputClass(!!errors.password)}
               {...ariaFor('password', !!errors.password)}
-              {...register('password', rules.password)}
+              {...register('password', rules.password())}
             />
             <FieldError id="password" message={errors.password?.message} />
           </div>
