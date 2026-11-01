@@ -4,7 +4,6 @@ import { useRouter } from 'next/navigation';
 import { useForm } from 'react-hook-form';
 import Icon from '@/components/ui/AppIcon';
 import AppLogo from '@/components/ui/AppLogo';
-import Link from 'next/link';
 import RegisterClinicForm from './RegisterClinicForm';
 import { FieldError, RequiredMark, RequiredLegend, inputClass, ariaFor } from '@/components/ui/FormField';
 import { EMAIL_PATTERN } from '@/lib/validators';
@@ -34,7 +33,7 @@ export default function AuthFormCard() {
     setAuthError('');
     if (!hasSupabaseEnv()) {
       setAuthError(
-        'Supabase no est\u00e1 configurado. En Vercel o .env.local define NEXT_PUBLIC_SUPABASE_URL y NEXT_PUBLIC_SUPABASE_ANON_KEY del proyecto cnyrlypddaehuieezebt.',
+        'Supabase no esta configurado. En Vercel o .env.local define NEXT_PUBLIC_SUPABASE_URL y NEXT_PUBLIC_SUPABASE_ANON_KEY del proyecto cnyrlypddaehuieezebt.',
       );
       return;
     }
@@ -47,7 +46,7 @@ export default function AuthFormCard() {
       router.push(href);
       router.refresh();
     } catch (e: unknown) {
-      const msg = e instanceof Error ? e.message : 'No se pudo iniciar sesi\u00f3n';
+      const msg = e instanceof Error ? e.message : 'No se pudo iniciar sesion';
       setAuthError(msg);
     } finally {
       setLoading(false);
@@ -78,7 +77,7 @@ export default function AuthFormCard() {
               tab === 'register' ? 'bg-card text-foreground shadow-sm' : 'text-muted-foreground'
             }`}
           >
-            Registrar cl\u00ednica
+            Registrar clinica
           </button>
         </div>
 
@@ -86,7 +85,7 @@ export default function AuthFormCard() {
           <div>
             <h2 className="text-2xl font-bold">Bienvenido de nuevo</h2>
             <p className="mt-1 text-sm text-muted-foreground">
-              Accede con un usuario real de Supabase Auth (no cuentas de demostraci\u00f3n).
+              Accede con un usuario real de Supabase Auth (no cuentas de demostracion).
             </p>
             <RequiredLegend />
 
@@ -96,16 +95,15 @@ export default function AuthFormCard() {
               </div>
             ) : null}
 
-            <div className="mt-4 rounded-lg border border-amber-500/30 bg-amber-500/10 px-3 py-2 text-xs text-amber-900 dark:text-amber-100">
-              Para entrar: crea el usuario en Supabase \u2192 Authentication \u2192 Users, o registra una cl\u00ednica
-              aqu\u00ed. Asigna el rol en <code className="font-mono">app_metadata.role</code> o en{' '}
-              <code className="font-mono">profiles</code>.
+            <div className="mt-4 rounded-lg border border-amber-500/30 bg-amber-500/10 px-3 py-2 text-xs text-amber-900">
+              Para entrar: crea el usuario en Supabase (Authentication - Users), o registra una clinica
+              aqui. Asigna el rol en app_metadata.role o en profiles.
             </div>
 
             <form onSubmit={handleSubmit(onSubmit)} className="mt-5 space-y-4" noValidate>
               <div>
                 <label htmlFor="email" className="mb-1.5 block text-sm font-semibold">
-                  Correo electr\u00f3nico
+                  Correo electronico
                   <RequiredMark />
                 </label>
                 <input
@@ -116,7 +114,7 @@ export default function AuthFormCard() {
                   {...ariaFor('email', !!errors.email)}
                   {...register('email', {
                     required: 'El correo es obligatorio',
-                    pattern: { value: EMAIL_PATTERN, message: 'Correo no v\u00e1lido' },
+                    pattern: { value: EMAIL_PATTERN, message: 'Correo no valido' },
                   })}
                 />
                 <FieldError id="email" message={errors.email?.message} />
@@ -124,7 +122,7 @@ export default function AuthFormCard() {
 
               <div>
                 <label htmlFor="password" className="mb-1.5 block text-sm font-semibold">
-                  Contrase\u00f1a
+                  Contrasena
                   <RequiredMark />
                 </label>
                 <div className="relative">
@@ -134,13 +132,13 @@ export default function AuthFormCard() {
                     autoComplete="current-password"
                     className={inputClass(!!errors.password) + ' pr-10'}
                     {...ariaFor('password', !!errors.password)}
-                    {...register('password', { required: 'La contrase\u00f1a es obligatoria' })}
+                    {...register('password', { required: 'La contrasena es obligatoria' })}
                   />
                   <button
                     type="button"
                     onClick={() => setShowPwd((v) => !v)}
                     className="absolute right-2 top-1/2 -translate-y-1/2 rounded p-1 text-muted-foreground hover:text-foreground"
-                    aria-label={showPwd ? 'Ocultar contrase\u00f1a' : 'Mostrar contrase\u00f1a'}
+                    aria-label={showPwd ? 'Ocultar contrasena' : 'Mostrar contrasena'}
                   >
                     <Icon name={showPwd ? 'EyeSlashIcon' : 'EyeIcon'} size={18} />
                   </button>
@@ -150,7 +148,7 @@ export default function AuthFormCard() {
 
               <label className="flex items-center gap-2 text-sm">
                 <input type="checkbox" className="h-4 w-4 rounded border-input accent-primary" {...register('remember')} />
-                Mantener sesi\u00f3n iniciada en este equipo
+                Mantener sesion iniciada en este equipo
               </label>
 
               <button
@@ -161,10 +159,10 @@ export default function AuthFormCard() {
                 {loading ? (
                   <>
                     <Icon name="ArrowPathIcon" size={18} className="animate-spin" />
-                    Verificando\u2026
+                    Verificando...
                   </>
                 ) : (
-                  'Ingresar a mi cl\u00ednica'
+                  'Ingresar a mi clinica'
                 )}
               </button>
             </form>
@@ -174,7 +172,7 @@ export default function AuthFormCard() {
         )}
 
         <p className="mt-6 text-center text-xs text-muted-foreground">
-          Al continuar aceptas los t\u00e9rminos del servicio y la pol\u00edtica de privacidad (LOPDP).
+          Al continuar aceptas los terminos del servicio y la politica de privacidad (LOPDP).
         </p>
       </div>
     </section>
