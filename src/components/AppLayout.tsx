@@ -1,29 +1,44 @@
 'use client';
 import React, { useState } from 'react';
+import { usePathname } from 'next/navigation';
 import Sidebar from '@/components/Sidebar';
+import GlobalAdminSidebar from '@/components/GlobalAdminSidebar';
 import Topbar from '@/components/Topbar';
+import { useAuth } from '@/components/AuthProvider';
 
-interface AppLayoutProps {
-  children: React.ReactNode;
-}
-
-export default function AppLayout({ children }: AppLayoutProps) {
+export default function AppLayout({ children }: { children: React.ReactNode }) {
   const [collapsed, setCollapsed] = useState(false);
   const [mobileOpen, setMobileOpen] = useState(false);
+  const pathname = usePathname();
+  const { user } = useAuth();
+
+  const isGlobal =
+    user?.role === 'super_admin' || pathname.startsWith('/global-admin-panel');
 
   return (
     <div className="min-h-screen bg-background">
-      <Sidebar
-        collapsed={collapsed}
-        onToggle={() => setCollapsed((v) => !v)}
-        mobileOpen={mobileOpen}
-        onCloseMobile={() => setMobileOpen(false)}
-      />
-      <div className={`flex min-h-screen flex-col transition-all duration-300 ease-in-out ${collapsed ? 'lg:pl-16' : 'lg:pl-60'}`}>
-        <Topbar onOpenMobile={() => setMobileOpen(true)} />
-        <main className="flex-1 px-4 py-6 lg:px-6 xl:px-8 2xl:px-12">
-          <div className="mx-auto w-full max-w-screen-2xl">{children}</div>
-        </main>
+      {isGlobal ? (
+        <GlobalAdminSidebar
+          collapsed={collapsed}
+          onToggle={() => setCollapsed((c) => !c)}
+          mobileOpen={mobileOpen}
+          onCloseMobile={() => setMobileOpen(false)}
+        />
+      ) : (
+        <Sidebar
+          collapsed={collapsed}
+          onToggle={() => setCollapsed((c) => !c)}
+          mobileOpen={mobileOpen}
+          onCloseMobile={() => setMobileOpen(false)}
+        />
+      )}
+      <div
+        className={`transition-all duration-300 ${
+          collapsed ? 'lg:pl-16' : 'lg:pl-60'
+        }`}
+      >
+        <Topbar onOpenMobile={() => setMobileOpen(true)} platformMode={isGlobal} />
+        <main className="p-4 sm:p-6">{children}</main>
       </div>
     </div>
   );
