@@ -2,6 +2,7 @@ import { getSupabase } from './client';
 import { getSessionUser } from './session';
 import { homeForRole } from './roles';
 import { normalizeEmail, isValidEmail } from '@/lib/validators';
+import { friendlyAuthError } from './authErrors';
 
 export type LoginInput = {
   email: string;
@@ -21,50 +22,21 @@ export type RegisterClinicInput = {
   createdBySuperAdmin?: boolean;
 };
 
-function friendlyAuthError(message: string): string {
-  const m = message.toLowerCase();
-  if (m.includes('email address') && m.includes('invalid')) {
-    return (
-      'Supabase rechazo el correo como invalido. ' +
-      'Revisa: 1) Auth > Providers > Email (Enable sign ups ON). ' +
-      '2) No haya lista de dominios restringidos. ' +
-      '3) Escribe el correo sin espacios (ej. nombre@gmail.com). ' +
-      'Detalle: ' +
-      message
-    );
-  }
-  if (m.includes('invalid login') || m.includes('invalid credentials')) {
-    return 'Correo o contrasena incorrectos.';
-  }
-  if (m.includes('email not confirmed')) {
-    return 'Confirma el correo o desactiva Confirm email en Supabase Auth > Providers.';
-  }
-  if (m.includes('signups not allowed') || m.includes('signup is disabled')) {
-    return 'Los registros estan deshabilitados en Supabase Auth. Activa Enable sign ups.';
-  }
-  if (m.includes('already registered') || m.includes('already been registered') || m.includes('user already')) {
-    return 'Ese correo ya esta registrado en Auth. Usa otro o restablece la clave.';
-  }
-  if (m.includes('faltan next_public') || m.includes('dummy')) {
-    return 'Faltan NEXT_PUBLIC_SUPABASE_URL / ANON_KEY en Vercel.';
-  }
-  if (m.includes('permission') || m.includes('policy') || m.includes('rls')) {
-    return 'Permiso denegado (RLS).';
-  }
-  if (m.includes('function') && (m.includes('not found') || m.includes('does not exist'))) {
-    return 'El servicio de alta de clinicas no esta disponible. Intenta de nuevo en unos minutos.';
-  }
-  return message;
-}
-
 export async function signInWithPassword({ email, password }: LoginInput) {
   const supabase = getSupabase();
-  const { data, error } = await supabase.auth.signInWithPassword({
-    email: normalizeEmail(email),
-    password,
-  });
-  if (error) throw new Error(friendlyAuthError(error.message));
-  return data;
+  try {
+    const { data, error } = await supabase.auth.signInWithPassword({
+      email: normalizeEmail(email),
+      password,
+    });
+    if (error) throw new Error(friendlyAuthError(error.message));
+    return data;
+  } catch (e: unknown) {
+    if (e instanceof Error && e.message.toLowerCase().includes('failed to fetch')) {
+      throw new Error(friendlyAuthError('Failed to fetch'));
+    }
+    throw e;
+  }
 }
 
 export async function signInAndResolveHome(input: LoginInput) {
@@ -87,67 +59,140 @@ export async function getSession() {
   return data.session;
 }
 
-async function invokeClinicas(body: Record<string, unknown>) {
+async function callRegisterClinicRpc(params: {
+  userId: string | null;
+  clinicName: string;
+  ruc: string;
+  mspCode: string | null;
+  city: string | null;
+  adminName: string;
+  adminEmail: string;
+  phone: string | null;
+  plan: string;
+}) {
   const supabase = getSupabase();
-  const { data, error } = await supabase.functions.invoke('clinicas', { body });
-  if (error) {
-    let msg = error.message || 'No se pudo completar la solicitud.';
-    try {
-      const ctx = (error as { context?: Response }).context;
-      const j = ctx ? await ctx.json() : null;
-      if (j?.error) msg = j.error;
-    } catch {
-      /* respuesta sin JSON: se deja el mensaje generico */
+  const attempts: Record<string, unknown>[] = [
+    {
+      p_clinic_name: params.clinicName,
+      p_ruc: params.ruc,
+      p_msp_code: params.mspCode,
+      p_city: params.city,
+      p_admin_name: params.adminName,
+      p_admin_email: params.adminEmail,
+      p_phone: params.phone,
+      p_plan: params.plan,
+      p_user_id: params.userId,
+    },
+    {
+      clinic_name: params.clinicName,
+      ruc: params.ruc,
+      city: params.city,
+      admin_name: params.adminName,
+      admin_email: params.adminEmail,
+      phone: params.phone,
+      plan: params.plan,
+      user_id: params.userId,
+    },
+    {
+      p_nombre: params.clinicName,
+      p_ruc: params.ruc,
+      p_ciudad: params.city,
+      p_admin_nombre: params.adminName,
+      p_admin_email: params.adminEmail,
+      p_telefono: params.phone,
+      p_plan: params.plan,
+      p_user_id: params.userId,
+    },
+  ];
+
+  const errors: string[] = [];
+  for (const payload of attempts) {
+    const { data, error } = await supabase.rpc('register_clinic', payload);
+    if (!error) return data;
+    errors.push(error.message);
+    if (/could not find|does not exist|not find the function/i.test(error.message)) {
+      throw new Error(friendlyAuthError(error.message));
     }
-    throw new Error(friendlyAuthError(msg));
   }
-  if (data?.error) throw new Error(friendlyAuthError(data.error));
-  return data as { ok: boolean; clinic_id: string; user_id: string; plan: string; status: string };
+  throw new Error(friendlyAuthError(errors[errors.length - 1] || 'register_clinic fallo'));
 }
 
-/**
- * Registro de clinica (Edge Function `clinicas`: admin + clinica + perfil en un solo paso,
- * con rollback si algo falla; no usa signUp, asi que no toca la sesion del admin global):
- * - createdBySuperAdmin: true  -> accion "crear": el servidor exige administrador global.
- * - createdBySuperAdmin: false -> accion "registro_publico": sin sesion, con limite de intentos.
- */
 export async function registerClinic(input: RegisterClinicInput) {
+  const supabase = getSupabase();
   const email = normalizeEmail(input.adminEmail);
-  const asGlobal = !!input.createdBySuperAdmin;
-  const minPass = asGlobal ? 6 : 8;
+  const password = input.password;
 
   if (!isValidEmail(email)) {
     throw new Error('Correo del administrador no valido. Ejemplo: nombre@gmail.com');
   }
-  if (!input.password || input.password.length < minPass) {
-    throw new Error(`La contrasena debe tener al menos ${minPass} caracteres`);
+  if (!password || password.length < 8) {
+    throw new Error('La contrasena debe tener al menos 8 caracteres');
   }
   if (!input.clinicName.trim() || !input.ruc.trim()) {
     throw new Error('Nombre de clinica y RUC son obligatorios');
   }
 
-  const data = await invokeClinicas({
-    action: asGlobal ? 'crear' : 'registro_publico',
-    clinica: {
-      name: input.clinicName.trim(),
-      ruc: input.ruc.trim().replace(/\D/g, ''),
-      msp_code: input.mspCode?.trim() || null,
-      city: input.city?.trim() || null,
-      plan: input.plan || 'inicial',
-    },
-    admin: {
-      full_name: input.adminName.trim(),
+  const { data: prevSessionData } = await supabase.auth.getSession();
+  const hadSession = !!prevSessionData.session;
+
+  let signUpData;
+  try {
+    const res = await supabase.auth.signUp({
       email,
+      password,
+      options: {
+        data: {
+          full_name: input.adminName.trim(),
+          role: 'admin',
+          clinic_name: input.clinicName.trim(),
+        },
+        emailRedirectTo:
+          typeof window !== 'undefined'
+            ? `${window.location.origin}/sign-up-login-screen`
+            : undefined,
+      },
+    });
+    if (res.error) throw new Error(friendlyAuthError(res.error.message));
+    signUpData = res.data;
+  } catch (e: unknown) {
+    if (e instanceof Error) throw new Error(friendlyAuthError(e.message));
+    throw e;
+  }
+
+  const userId = signUpData.user?.id ?? null;
+
+  let clinicData: unknown;
+  try {
+    clinicData = await callRegisterClinicRpc({
+      userId,
+      clinicName: input.clinicName.trim(),
+      ruc: input.ruc.trim().replace(/\D/g, ''),
+      mspCode: input.mspCode?.trim() || null,
+      city: input.city?.trim() || null,
+      adminName: input.adminName.trim(),
+      adminEmail: email,
       phone: input.phone?.trim() || null,
-      password: input.password,
-    },
-  });
+      plan: input.plan || 'pro',
+    });
+  } catch (rpcErr) {
+    const extra = rpcErr instanceof Error ? rpcErr.message : 'Error en register_clinic';
+    throw new Error(
+      `${extra} (El usuario Auth pudo crearse: ${email}. Revisalo en Authentication > Users).`,
+    );
+  }
+
+  if (input.createdBySuperAdmin || hadSession) {
+    await supabase.auth.signOut();
+  }
 
   return {
-    user: { id: data.user_id },
-    clinic: data,
-    message: asGlobal
-      ? `Clinica creada. El administrador ya puede ingresar con ${email} y la contrasena que definiste.`
-      : 'Tu clinica y tu cuenta de administrador ya estan activas. Inicia sesion con el correo y la contrasena que acabas de definir.',
+    user: signUpData.user,
+    clinic: clinicData,
+    needsEmailConfirmation: !signUpData.session,
+    message: input.createdBySuperAdmin
+      ? 'Clinica creada. Vuelve a iniciar sesion como admin global.'
+      : signUpData.session
+        ? 'Clinica creada. Ya puedes usar el sistema con este admin.'
+        : 'Clinica creada. Confirma el email si Supabase lo exige, luego inicia sesion.',
   };
 }
