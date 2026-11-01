@@ -25,9 +25,9 @@ interface RegisterClinicFormProps {
 }
 
 const plans = [
-  { id: 'plan-start', value: 'inicial', name: 'Inicial', price: '$29/mes', detail: '1 doctor \u00b7 150 pacientes' },
-  { id: 'plan-pro', value: 'pro', name: 'Cl\u00ednica Pro', price: '$79/mes', detail: '5 doctores \u00b7 ilimitado' },
-  { id: 'plan-net', value: 'red', name: 'Red de cl\u00ednicas', price: '$199/mes', detail: 'Multi-sede \u00b7 API' },
+  { id: 'plan-start', value: 'inicial', name: 'Inicial', price: '$29/mes', detail: '1 doctor - 150 pacientes' },
+  { id: 'plan-pro', value: 'pro', name: 'Clinica Pro', price: '$79/mes', detail: '5 doctores - ilimitado' },
+  { id: 'plan-net', value: 'red', name: 'Red de clinicas', price: '$199/mes', detail: 'Multi-sede - API' },
 ];
 
 export default function RegisterClinicForm({ onDone }: RegisterClinicFormProps) {
@@ -58,7 +58,7 @@ export default function RegisterClinicForm({ onDone }: RegisterClinicFormProps) 
       });
       setDone(true);
     } catch (e: unknown) {
-      const msg = e instanceof Error ? e.message : 'Error al registrar la cl\u00ednica';
+      const msg = e instanceof Error ? e.message : 'Error al registrar la clinica';
       alert(msg);
     } finally {
       setLoading(false);
@@ -71,9 +71,9 @@ export default function RegisterClinicForm({ onDone }: RegisterClinicFormProps) 
         <span className="mx-auto mb-3 flex h-12 w-12 items-center justify-center rounded-full bg-success text-success-foreground">
           <Icon name="CheckIcon" size={26} />
         </span>
-        <h3 className="text-lg font-bold">Cl\u00ednica creada correctamente</h3>
+        <h3 className="text-lg font-bold">Clinica creada correctamente</h3>
         <p className="mt-1 text-sm text-muted-foreground">
-          Revisa el correo del administrador si Supabase pide confirmaci\u00f3n. Luego inicia sesi\u00f3n.
+          Revisa el correo del administrador si Supabase pide confirmacion. Luego inicia sesion.
         </p>
         <button
           onClick={onDone}
@@ -87,16 +87,16 @@ export default function RegisterClinicForm({ onDone }: RegisterClinicFormProps) 
 
   return (
     <div className="animate-fade-in">
-      <h2 className="text-2xl font-bold">Crear cl\u00ednica</h2>
+      <h2 className="text-2xl font-bold">Crear clinica</h2>
       <p className="mt-1 text-sm text-muted-foreground">
-        Provisiona el tenant con la funci\u00f3n register_clinic de Supabase.
+        Provisiona el tenant con la funcion register_clinic de Supabase.
       </p>
       <RequiredLegend />
 
       <form onSubmit={handleSubmit(onSubmit)} className="mt-5 space-y-4" noValidate>
         <div>
           <label htmlFor="clinicName" className="mb-1.5 block text-sm font-semibold">
-            Nombre de la cl\u00ednica
+            Nombre de la clinica
             <RequiredMark />
           </label>
           <input
@@ -119,7 +119,7 @@ export default function RegisterClinicForm({ onDone }: RegisterClinicFormProps) 
           </div>
           <div>
             <label htmlFor="mspCode" className="mb-1.5 block text-sm font-semibold">
-              C\u00f3digo MSP
+              Codigo MSP
             </label>
             <input id="mspCode" className={inputClass(false)} {...register('mspCode')} />
           </div>
@@ -134,7 +134,7 @@ export default function RegisterClinicForm({ onDone }: RegisterClinicFormProps) 
           </div>
           <div>
             <label htmlFor="phone" className="mb-1.5 block text-sm font-semibold">
-              Tel\u00e9fono
+              Telefono
             </label>
             <input id="phone" className={inputClass(false)} {...register('phone')} />
           </div>
@@ -172,7 +172,7 @@ export default function RegisterClinicForm({ onDone }: RegisterClinicFormProps) 
         <div className="grid gap-4 sm:grid-cols-2">
           <div>
             <label htmlFor="password" className="mb-1.5 block text-sm font-semibold">
-              Contrase\u00f1a
+              Contrasena
               <RequiredMark />
             </label>
             <input
@@ -186,7 +186,7 @@ export default function RegisterClinicForm({ onDone }: RegisterClinicFormProps) 
           </div>
           <div>
             <label htmlFor="confirmPassword" className="mb-1.5 block text-sm font-semibold">
-              Confirmar contrase\u00f1a
+              Confirmar contrasena
               <RequiredMark />
             </label>
             <input
@@ -195,8 +195,8 @@ export default function RegisterClinicForm({ onDone }: RegisterClinicFormProps) 
               className={inputClass(!!errors.confirmPassword)}
               {...ariaFor('confirmPassword', !!errors.confirmPassword)}
               {...register('confirmPassword', {
-                required: 'Confirma la contrase\u00f1a',
-                validate: (v) => v === passwordValue || 'Las contrase\u00f1as no coinciden',
+                required: 'Confirma la contrasena',
+                validate: (v) => v === passwordValue || 'Las contrasenas no coinciden',
               })}
             />
             <FieldError id="confirmPassword" message={errors.confirmPassword?.message} />
@@ -253,10 +253,10 @@ export default function RegisterClinicForm({ onDone }: RegisterClinicFormProps) 
           {loading ? (
             <>
               <Icon name="ArrowPathIcon" size={18} className="animate-spin" />
-              Creando cl\u00ednica\u2026
+              Creando clinica...
             </>
           ) : (
-            'Crear cl\u00ednica'
+            'Crear clinica'
           )}
         </button>
       </form>
