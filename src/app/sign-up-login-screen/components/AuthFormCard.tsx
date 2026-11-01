@@ -5,24 +5,17 @@ import { useForm } from 'react-hook-form';
 import Icon from '@/components/ui/AppIcon';
 import AppLogo from '@/components/ui/AppLogo';
 import Link from 'next/link';
-import DemoCredentialsBox, { DemoCredential } from './DemoCredentialsBox';
 import RegisterClinicForm from './RegisterClinicForm';
 import { FieldError, RequiredMark, RequiredLegend, inputClass, ariaFor } from '@/components/ui/FormField';
 import { EMAIL_PATTERN } from '@/lib/validators';
-import { signInWithPassword } from '@/lib/supabase/auth';
+import { signInAndResolveHome } from '@/lib/supabase/auth';
+import { hasSupabaseEnv } from '@/lib/supabase/client';
 
 interface LoginValues {
   email: string;
   password: string;
   remember: boolean;
 }
-
-const demoAccounts: DemoCredential[] = [
-  { id: 'cred-admin', role: 'Admin de clínica', email: 'mrosero@sonrisaboreal.ec', password: 'Clinica#2026' },
-  { id: 'cred-doctor', role: 'Odontólogo', email: 'candrade@sonrisaboreal.ec', password: 'Doctora#2026' },
-  { id: 'cred-recep', role: 'Recepción', email: 'recepcion@sonrisaboreal.ec', password: 'Recepcion#2026' },
-  { id: 'cred-global', role: 'Admin global', email: 'plataforma@dentalcloud.ec', password: 'Global#2026' },
-];
 
 export default function AuthFormCard() {
   const router = useRouter();
@@ -34,25 +27,27 @@ export default function AuthFormCard() {
   const {
     register,
     handleSubmit,
-    setValue,
     formState: { errors },
   } = useForm<LoginValues>({ defaultValues: { email: '', password: '', remember: true } });
 
-  const useCredential = (c: DemoCredential) => {
-    setValue('email', c.email, { shouldValidate: true });
-    setValue('password', c.password, { shouldValidate: true });
-    setAuthError('');
-  };
-
   const onSubmit = async (values: LoginValues) => {
     setAuthError('');
+    if (!hasSupabaseEnv()) {
+      setAuthError(
+        'Supabase no est\u00e1 configurado. En Vercel o .env.local define NEXT_PUBLIC_SUPABASE_URL y NEXT_PUBLIC_SUPABASE_ANON_KEY del proyecto cnyrlypddaehuieezebt.',
+      );
+      return;
+    }
     setLoading(true);
     try {
-      await signInWithPassword({ email: values.email, password: values.password });
-      router.push('/');
+      const { href } = await signInAndResolveHome({
+        email: values.email,
+        password: values.password,
+      });
+      router.push(href);
       router.refresh();
     } catch (e: unknown) {
-      const msg = e instanceof Error ? e.message : 'No se pudo iniciar sesión';
+      const msg = e instanceof Error ? e.message : 'No se pudo iniciar sesi\u00f3n';
       setAuthError(msg);
     } finally {
       setLoading(false);
@@ -83,14 +78,16 @@ export default function AuthFormCard() {
               tab === 'register' ? 'bg-card text-foreground shadow-sm' : 'text-muted-foreground'
             }`}
           >
-            Registrar clínica
+            Registrar cl\u00ednica
           </button>
         </div>
 
         {tab === 'login' ? (
           <div>
             <h2 className="text-2xl font-bold">Bienvenido de nuevo</h2>
-            <p className="mt-1 text-sm text-muted-foreground">Accede con tu cuenta de clínica o plataforma.</p>
+            <p className="mt-1 text-sm text-muted-foreground">
+              Accede con un usuario real de Supabase Auth (no cuentas de demostraci\u00f3n).
+            </p>
             <RequiredLegend />
 
             {authError ? (
@@ -99,10 +96,16 @@ export default function AuthFormCard() {
               </div>
             ) : null}
 
+            <div className="mt-4 rounded-lg border border-amber-500/30 bg-amber-500/10 px-3 py-2 text-xs text-amber-900 dark:text-amber-100">
+              Para entrar: crea el usuario en Supabase \u2192 Authentication \u2192 Users, o registra una cl\u00ednica
+              aqu\u00ed. Asigna el rol en <code className="font-mono">app_metadata.role</code> o en{' '}
+              <code className="font-mono">profiles</code>.
+            </div>
+
             <form onSubmit={handleSubmit(onSubmit)} className="mt-5 space-y-4" noValidate>
               <div>
                 <label htmlFor="email" className="mb-1.5 block text-sm font-semibold">
-                  Correo electrónico
+                  Correo electr\u00f3nico
                   <RequiredMark />
                 </label>
                 <input
@@ -113,7 +116,7 @@ export default function AuthFormCard() {
                   {...ariaFor('email', !!errors.email)}
                   {...register('email', {
                     required: 'El correo es obligatorio',
-                    pattern: { value: EMAIL_PATTERN, message: 'Correo no válido' },
+                    pattern: { value: EMAIL_PATTERN, message: 'Correo no v\u00e1lido' },
                   })}
                 />
                 <FieldError id="email" message={errors.email?.message} />
@@ -121,7 +124,7 @@ export default function AuthFormCard() {
 
               <div>
                 <label htmlFor="password" className="mb-1.5 block text-sm font-semibold">
-                  Contraseña
+                  Contrase\u00f1a
                   <RequiredMark />
                 </label>
                 <div className="relative">
@@ -131,13 +134,13 @@ export default function AuthFormCard() {
                     autoComplete="current-password"
                     className={inputClass(!!errors.password) + ' pr-10'}
                     {...ariaFor('password', !!errors.password)}
-                    {...register('password', { required: 'La contraseña es obligatoria' })}
+                    {...register('password', { required: 'La contrase\u00f1a es obligatoria' })}
                   />
                   <button
                     type="button"
                     onClick={() => setShowPwd((v) => !v)}
                     className="absolute right-2 top-1/2 -translate-y-1/2 rounded p-1 text-muted-foreground hover:text-foreground"
-                    aria-label={showPwd ? 'Ocultar contraseña' : 'Mostrar contraseña'}
+                    aria-label={showPwd ? 'Ocultar contrase\u00f1a' : 'Mostrar contrase\u00f1a'}
                   >
                     <Icon name={showPwd ? 'EyeSlashIcon' : 'EyeIcon'} size={18} />
                   </button>
@@ -147,7 +150,7 @@ export default function AuthFormCard() {
 
               <label className="flex items-center gap-2 text-sm">
                 <input type="checkbox" className="h-4 w-4 rounded border-input accent-primary" {...register('remember')} />
-                Mantener sesión iniciada en este equipo
+                Mantener sesi\u00f3n iniciada en este equipo
               </label>
 
               <button
@@ -158,30 +161,20 @@ export default function AuthFormCard() {
                 {loading ? (
                   <>
                     <Icon name="ArrowPathIcon" size={18} className="animate-spin" />
-                    Verificando…
+                    Verificando\u2026
                   </>
                 ) : (
-                  'Ingresar a mi clínica'
+                  'Ingresar a mi cl\u00ednica'
                 )}
               </button>
             </form>
-
-            <DemoCredentialsBox credentials={demoAccounts} onUse={useCredential} />
           </div>
         ) : (
           <RegisterClinicForm onDone={() => setTab('login')} />
         )}
 
         <p className="mt-6 text-center text-xs text-muted-foreground">
-          Al continuar aceptas los{' '}
-          <Link href="/sign-up-login-screen" className="font-semibold text-primary hover:underline">
-            Términos del servicio
-          </Link>{' '}
-          y la{' '}
-          <Link href="/sign-up-login-screen" className="font-semibold text-primary hover:underline">
-            Política de privacidad
-          </Link>
-          , conforme a la Ley Orgánica de Protección de Datos Personales.
+          Al continuar aceptas los t\u00e9rminos del servicio y la pol\u00edtica de privacidad (LOPDP).
         </p>
       </div>
     </section>
