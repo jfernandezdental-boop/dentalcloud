@@ -33,7 +33,7 @@ export default function AuthFormCard() {
     setAuthError('');
     if (!hasSupabaseEnv()) {
       setAuthError(
-        'Supabase no esta configurado. En Vercel o .env.local define NEXT_PUBLIC_SUPABASE_URL y NEXT_PUBLIC_SUPABASE_ANON_KEY del proyecto cnyrlypddaehuieezebt.',
+        'Supabase no esta configurado. Define NEXT_PUBLIC_SUPABASE_URL y NEXT_PUBLIC_SUPABASE_ANON_KEY en Vercel o .env.local.',
       );
       return;
     }
