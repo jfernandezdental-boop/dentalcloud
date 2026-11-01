@@ -146,7 +146,7 @@ export default function CreateClinicModal({ open, onClose, onCreated }: CreateCl
             RUC
             <RequiredMark />
           </label>
-          <input className={inputClass(!!errors.ruc)} {...register('ruc', rules.ruc)} />
+          <input className={inputClass(!!errors.ruc)} {...register('ruc', rules.ruc())} />
           <FieldError id="ruc" message={errors.ruc?.message} />
         </div>
         <div>
@@ -179,7 +179,7 @@ export default function CreateClinicModal({ open, onClose, onCreated }: CreateCl
             Admin email
             <RequiredMark />
           </label>
-          <input type="email" className={inputClass(!!errors.adminEmail)} {...register('adminEmail', rules.email)} />
+          <input type="email" className={inputClass(!!errors.adminEmail)} {...register('adminEmail', rules.email())} />
           <FieldError id="adminEmail" message={errors.adminEmail?.message} />
         </div>
         <div>
@@ -191,7 +191,7 @@ export default function CreateClinicModal({ open, onClose, onCreated }: CreateCl
             Contrasena inicial del admin
             <RequiredMark />
           </label>
-          <input type="password" className={inputClass(!!errors.password)} {...register('password', rules.password)} />
+          <input type="password" className={inputClass(!!errors.password)} {...register('password', rules.password())} />
           <FieldError id="password" message={errors.password?.message} />
         </div>
       </form>
