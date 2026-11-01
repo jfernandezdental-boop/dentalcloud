@@ -13,6 +13,12 @@ export type SessionUser = {
 
 const PLATFORM_ADMIN_EMAILS = new Set(['jfernandez.dental@gmail.com']);
 
+/** Mapeo temporal email admin -> nombre clinica (hasta que profiles tenga el dato) */
+const EMAIL_CLINIC_HINT: Record<string, string> = {
+  'clinicaldentalela@gmail.com': 'Estudio dental Vittoria',
+  'admin.demo@sonrisaboreal.ec': 'Sonrisa Boreal',
+};
+
 export async function getSessionUser(): Promise<SessionUser | null> {
   const supabase = getSupabase();
   const { data: authData, error } = await supabase.auth.getUser();
@@ -27,6 +33,9 @@ export async function getSessionUser(): Promise<SessionUser | null> {
 
   let role = normalizeRole(String(meta.role || meta.rol || meta.user_role || ''));
   if (PLATFORM_ADMIN_EMAILS.has(email)) role = 'super_admin';
+  if (!meta.role && !meta.rol && email && !PLATFORM_ADMIN_EMAILS.has(email)) {
+    role = 'admin';
+  }
 
   let fullName = String(meta.full_name || meta.name || meta.nombre || user.email || '');
   let clinicId =
@@ -34,7 +43,11 @@ export async function getSessionUser(): Promise<SessionUser | null> {
     (meta.consultorio_id as string) ||
     (meta.tenant_id as string) ||
     null;
-  let clinicName = (meta.clinic_name as string) || (meta.clinica as string) || null;
+  let clinicName =
+    (meta.clinic_name as string) ||
+    (meta.clinica as string) ||
+    EMAIL_CLINIC_HINT[email] ||
+    null;
 
   if (role === 'super_admin') {
     clinicId = null;
@@ -56,9 +69,15 @@ export async function getSessionUser(): Promise<SessionUser | null> {
         fullName = String(p.full_name || p.nombre || p.name);
       if (role !== 'super_admin' && (p.clinic_id || p.consultorio_id || p.tenant_id))
         clinicId = String(p.clinic_id || p.consultorio_id || p.tenant_id);
+      if (role !== 'super_admin' && (p.clinic_name || p.clinica))
+        clinicName = String(p.clinic_name || p.clinica);
     }
   } catch {
     // profiles opcional
+  }
+
+  if (!clinicName && role !== 'super_admin') {
+    clinicName = EMAIL_CLINIC_HINT[email] || 'Mi clinica';
   }
 
   return {
