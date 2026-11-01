@@ -1,10 +1,24 @@
-export const EMAIL_PATTERN = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
-export const NAME_PATTERN = /^[A-Za-zÁÉÍÓÚÜÑáéíóúüñ][A-Za-zÁÉÍÓÚÜÑáéíóúüñ'.\- ]*$/;
+export const EMAIL_PATTERN = /^[a-zA-Z0-9._%+\-]+@[a-zA-Z0-9.\-]+\.[a-zA-Z]{2,}$/;
+export const NAME_PATTERN = /^[A-Za-z\u00C0-\u024F][A-Za-z\u00C0-\u024F'.\- ]*$/;
 export const MOBILE_PATTERN = /^09\d{8}$/;
 export const LANDLINE_OR_MOBILE_PATTERN = /^0\d{8,9}$/;
 
 export function onlyDigits(value: string): string {
   return (value || '').replace(/\D/g, '');
+}
+
+/** Quita espacios y caracteres invisibles del correo */
+export function normalizeEmail(value: string): string {
+  return (value || '')
+    .replace(/[\u200B-\u200D\uFEFF]/g, '')
+    .trim()
+    .toLowerCase();
+}
+
+export function isValidEmail(value: string): boolean {
+  const v = normalizeEmail(value);
+  if (!v || v.length > 254) return false;
+  return EMAIL_PATTERN.test(v);
 }
 
 export function isValidCedula(value: string): boolean {
@@ -27,12 +41,22 @@ export function isValidCedula(value: string): boolean {
   return check === parseInt(v[9], 10);
 }
 
+/**
+ * RUC Ecuador: 13 digitos (ideal) o 10 (cedula / RUC incompleto en alta).
+ * En alta de clinica no bloqueamos si son 10 digitos numericos.
+ */
 export function isValidRuc(value: string): boolean {
-  const v = (value || '').trim();
-  if (!/^\d{13}$/.test(v)) return false;
-  const province = parseInt(v.slice(0, 2), 10);
-  if (province < 1 || (province > 24 && province !== 30)) return false;
-  return v.endsWith('001') || /\d{3}$/.test(v);
+  const v = onlyDigits(value || '');
+  if (/^\d{13}$/.test(v)) {
+    const province = parseInt(v.slice(0, 2), 10);
+    if (province < 1 || (province > 24 && province !== 30)) return false;
+    return true;
+  }
+  if (/^\d{10}$/.test(v)) {
+    const province = parseInt(v.slice(0, 2), 10);
+    return province >= 1 && (province <= 24 || province === 30);
+  }
+  return false;
 }
 
 export type IdCountry = 'EC' | 'CL';
@@ -69,7 +93,7 @@ export function isValidNationalId(country: IdCountry, value: string): boolean {
 }
 
 export function todayISO(): string {
-  let d = new Date();
+  const d = new Date();
   const m = `${d.getMonth() + 1}`.padStart(2, '0');
   const day = `${d.getDate()}`.padStart(2, '0');
   return `${d.getFullYear()}-${m}-${day}`;
@@ -80,52 +104,59 @@ export const rules = {
     required: `${label} es obligatorio`,
     minLength: { value: 2, message: `${label} debe tener al menos 2 caracteres` },
     maxLength: { value: 80, message: `${label} no puede superar 80 caracteres` },
-    validate: (v: string) => NAME_PATTERN.test((v || '').trim()) || `${label} solo admite letras y espacios`,
+    validate: (v: string) =>
+      NAME_PATTERN.test((v || '').trim()) || `${label} solo admite letras y espacios`,
   }),
   email: (required = true) => ({
     required: required ? 'El correo es obligatorio' : false,
-    validate: (v: string) => !v || EMAIL_PATTERN.test(v.trim()) || 'Ingresa un correo válido, ej. nombre@dominio.ec',
+    validate: (v: string) =>
+      !v || isValidEmail(v) || 'Ingresa un correo valido, ej. nombre@gmail.com',
   }),
   mobile: (required = true) => ({
     required: required ? 'El celular es obligatorio' : false,
-    validate: (v: string) => !v || MOBILE_PATTERN.test(v.trim()) || 'Formato de celular: 09XXXXXXXX (10 dígitos)',
+    validate: (v: string) =>
+      !v || MOBILE_PATTERN.test(v.trim()) || 'Formato de celular: 09XXXXXXXX (10 digitos)',
   }),
   phone: (required = true) => ({
-    required: required ? 'El teléfono es obligatorio' : false,
+    required: required ? 'El telefono es obligatorio' : false,
     validate: (v: string) => {
       const digits = onlyDigits(v || '');
       if (!v) return true;
-      return /^0\d{8,9}$/.test(digits) || 'Teléfono no válido (9 o 10 dígitos, inicia con 0)';
+      return /^0\d{8,9}$/.test(digits) || 'Telefono no valido (9 o 10 digitos, inicia con 0)';
     },
   }),
   cedula: () => ({
-    required: 'La cédula es obligatoria',
-    validate: (v: string) => isValidCedula(v) || 'Cédula no válida: revisa los 10 dígitos',
+    required: 'La cedula es obligatoria',
+    validate: (v: string) => isValidCedula(v) || 'Cedula no valida: revisa los 10 digitos',
   }),
   nationalId: (getCountry: () => IdCountry) => ({
     required: 'El documento de identidad es obligatorio',
     validate: (v: string) => {
       const country = getCountry();
       if (isValidNationalId(country, v)) return true;
-      return country === 'CL' ?'RUT chileno no válido: revisa el número y el dígito verificador (ej. 12.345.678-5)' :'Cédula ecuatoriana no válida: revisa los 10 dígitos';
+      return country === 'CL'
+        ? 'RUT chileno no valido'
+        : 'Cedula ecuatoriana no valida: revisa los 10 digitos';
     },
   }),
   ruc: () => ({
     required: 'El RUC es obligatorio',
-    validate: (v: string) => isValidRuc(v) || 'El RUC debe tener 13 dígitos numéricos válidos',
+    validate: (v: string) =>
+      isValidRuc(v) ||
+      'RUC: 13 digitos (recomendado) o 10 digitos numericos de provincia valida',
   }),
   password: () => ({
-    required: 'La contraseña es obligatoria',
-    minLength: { value: 8, message: 'Mínimo 8 caracteres' },
+    required: 'La contrasena es obligatoria',
+    minLength: { value: 8, message: 'Minimo 8 caracteres' },
     validate: (v: string) =>
-      (/[A-Za-z]/.test(v || '') && /\d/.test(v || '')) || 'Debe combinar letras y números',
+      (/[A-Za-z]/.test(v || '') && /\d/.test(v || '')) || 'Debe combinar letras y numeros',
   }),
   pastDate: (label: string) => ({
     required: `${label} es obligatoria`,
     validate: (v: string) => {
       if (!v) return true;
       if (v > todayISO()) return `${label} no puede ser futura`;
-      if (v < '1900-01-01') return `${label} no es válida`;
+      if (v < '1900-01-01') return `${label} no es valida`;
       return true;
     },
   }),

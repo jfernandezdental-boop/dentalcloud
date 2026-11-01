@@ -1,6 +1,7 @@
 import { getSupabase } from './client';
 import { getSessionUser } from './session';
 import { homeForRole } from './roles';
+import { normalizeEmail, isValidEmail } from '@/lib/validators';
 
 export type LoginInput = {
   email: string;
@@ -17,32 +18,41 @@ export type RegisterClinicInput = {
   phone?: string;
   plan?: string;
   password: string;
-  /** true = panel global: no dejar sesion del admin de clinica */
   createdBySuperAdmin?: boolean;
 };
 
 function friendlyAuthError(message: string): string {
   const m = message.toLowerCase();
+  if (m.includes('email address') && m.includes('invalid')) {
+    return (
+      'Supabase rechazo el correo como invalido. ' +
+      'Revisa: 1) Auth > Providers > Email (Enable sign ups ON). ' +
+      '2) No haya lista de dominios restringidos. ' +
+      '3) Escribe el correo sin espacios (ej. nombre@gmail.com). ' +
+      'Detalle: ' +
+      message
+    );
+  }
   if (m.includes('invalid login') || m.includes('invalid credentials')) {
     return 'Correo o contrasena incorrectos.';
   }
   if (m.includes('email not confirmed')) {
     return 'Confirma el correo o desactiva Confirm email en Supabase Auth > Providers.';
   }
+  if (m.includes('signups not allowed') || m.includes('signup is disabled')) {
+    return 'Los registros estan deshabilitados en Supabase Auth. Activa Enable sign ups.';
+  }
   if (m.includes('already registered') || m.includes('already been registered') || m.includes('user already')) {
     return 'Ese correo ya esta registrado en Auth. Usa otro o restablece la clave.';
-  }
-  if (m.includes('password')) {
-    return message;
   }
   if (m.includes('faltan next_public') || m.includes('dummy')) {
     return 'Faltan NEXT_PUBLIC_SUPABASE_URL / ANON_KEY en Vercel.';
   }
   if (m.includes('permission') || m.includes('policy') || m.includes('rls')) {
-    return 'Permiso denegado (RLS). El rol o la politica no permiten crear la clinica.';
+    return 'Permiso denegado (RLS).';
   }
-  if (m.includes('function') && m.includes('not found')) {
-    return 'No existe la funcion register_clinic en Supabase. Debe crearla Claude/SQL (sin tocar tablas ajenas).';
+  if (m.includes('function') && (m.includes('not found') || m.includes('does not exist'))) {
+    return 'No existe register_clinic en Supabase. Claude debe crear/verificar la funcion.';
   }
   return message;
 }
@@ -50,7 +60,7 @@ function friendlyAuthError(message: string): string {
 export async function signInWithPassword({ email, password }: LoginInput) {
   const supabase = getSupabase();
   const { data, error } = await supabase.auth.signInWithPassword({
-    email: email.trim().toLowerCase(),
+    email: normalizeEmail(email),
     password,
   });
   if (error) throw new Error(friendlyAuthError(error.message));
@@ -77,7 +87,6 @@ export async function getSession() {
   return data.session;
 }
 
-/** Prueba varios nombres de argumentos de register_clinic */
 async function callRegisterClinicRpc(params: {
   userId: string | null;
   clinicName: string;
@@ -138,7 +147,6 @@ async function callRegisterClinicRpc(params: {
     const { data, error } = await supabase.rpc('register_clinic', payload);
     if (!error) return data;
     errors.push(error.message);
-    // Si la funcion no existe, no seguir
     if (/could not find|does not exist|not find the function/i.test(error.message)) {
       throw new Error(friendlyAuthError(error.message));
     }
@@ -147,30 +155,26 @@ async function callRegisterClinicRpc(params: {
   throw new Error(
     friendlyAuthError(
       errors[errors.length - 1] ||
-        'register_clinic rechazo todos los formatos de parametros. Revisa la firma en Supabase.',
+        'register_clinic rechazo los parametros. Revisar firma en Supabase.',
     ),
   );
 }
 
-/**
- * Registro de clinica:
- * 1) signUp del admin de clinica
- * 2) RPC register_clinic (varias firmas)
- * 3) Si createdBySuperAdmin: cierra sesion del admin nuevo para no perder el panel global
- */
 export async function registerClinic(input: RegisterClinicInput) {
   const supabase = getSupabase();
-  const email = input.adminEmail.trim().toLowerCase();
+  const email = normalizeEmail(input.adminEmail);
   const password = input.password;
 
-  if (!email || !password || password.length < 6) {
-    throw new Error('Email y contrasena (min. 6) son obligatorios');
+  if (!isValidEmail(email)) {
+    throw new Error('Correo del administrador no valido. Ejemplo: nombre@gmail.com');
+  }
+  if (!password || password.length < 8) {
+    throw new Error('La contrasena debe tener al menos 8 caracteres');
   }
   if (!input.clinicName.trim() || !input.ruc.trim()) {
     throw new Error('Nombre de clinica y RUC son obligatorios');
   }
 
-  // Sesion previa (admin global)
   const { data: prevSessionData } = await supabase.auth.getSession();
   const hadSession = !!prevSessionData.session;
 
@@ -194,13 +198,12 @@ export async function registerClinic(input: RegisterClinicInput) {
 
   const userId = signUpData.user?.id ?? null;
 
-  // Si Auth exige confirmacion, a veces no hay session; igual intentamos RPC con user id
   let clinicData: unknown;
   try {
     clinicData = await callRegisterClinicRpc({
       userId,
       clinicName: input.clinicName.trim(),
-      ruc: input.ruc.trim(),
+      ruc: input.ruc.trim().replace(/\D/g, ''),
       mspCode: input.mspCode?.trim() || null,
       city: input.city?.trim() || null,
       adminName: input.adminName.trim(),
@@ -209,15 +212,12 @@ export async function registerClinic(input: RegisterClinicInput) {
       plan: input.plan || 'pro',
     });
   } catch (rpcErr) {
-    // Si el RPC falla, el usuario Auth puede haber quedado creado
-    const extra =
-      rpcErr instanceof Error ? rpcErr.message : 'Error en register_clinic';
+    const extra = rpcErr instanceof Error ? rpcErr.message : 'Error en register_clinic';
     throw new Error(
       `${extra} (El usuario Auth pudo crearse: ${email}. Revisalo en Authentication > Users).`,
     );
   }
 
-  // Panel global: no quedarse logueado como admin de la clinica nueva
   if (input.createdBySuperAdmin || hadSession) {
     await supabase.auth.signOut();
   }
