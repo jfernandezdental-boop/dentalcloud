@@ -9,6 +9,7 @@ import DemoCredentialsBox, { DemoCredential } from './DemoCredentialsBox';
 import RegisterClinicForm from './RegisterClinicForm';
 import { FieldError, RequiredMark, RequiredLegend, inputClass, ariaFor } from '@/components/ui/FormField';
 import { EMAIL_PATTERN } from '@/lib/validators';
+import { signInWithPassword } from '@/lib/supabase/auth';
 
 interface LoginValues {
   email: string;
@@ -43,96 +44,100 @@ export default function AuthFormCard() {
     setAuthError('');
   };
 
-  const onSubmit = (values: LoginValues) => {
+  const onSubmit = async (values: LoginValues) => {
     setAuthError('');
     setLoading(true);
-    // Backend integration: POST /api/auth/login with tenant resolution
-    setTimeout(() => {
-      const match = demoAccounts.find((a) => a.email === values.email && a.password === values.password);
+    try {
+      await signInWithPassword({ email: values.email, password: values.password });
+      router.push('/');
+      router.refresh();
+    } catch (e: unknown) {
+      const msg = e instanceof Error ? e.message : 'No se pudo iniciar sesión';
+      setAuthError(msg);
+    } finally {
       setLoading(false);
-      if (!match) {
-        setAuthError('Credenciales inválidas — usa las cuentas demo de abajo para ingresar');
-        return;
-      }
-      router.push(match.id === 'cred-global' ? '/global-admin-panel' : '/');
-    }, 900);
+    }
   };
 
   return (
     <section className="flex items-center justify-center bg-background px-5 py-10 sm:px-10">
       <div className="w-full max-w-md animate-fade-in">
-        <div className="mb-6 flex items-center gap-2 lg:hidden">
-          <AppLogo size={36} />
-          <span className="text-xl font-bold">DentalCloud</span>
+        <div className="mb-8 flex items-center justify-center lg:hidden">
+          <AppLogo />
         </div>
 
-        <div className="mb-6 grid grid-cols-2 rounded-xl bg-muted p-1" role="tablist">
-          {(['login', 'register'] as const).map((t) => (
-            <button
-              key={`tab-${t}`}
-              role="tab"
-              aria-selected={tab === t}
-              onClick={() => setTab(t)}
-              className={`rounded-lg py-2 text-sm font-semibold transition-all duration-150 ${
-                tab === t ? 'bg-card text-foreground shadow' : 'text-muted-foreground hover:text-foreground'
-              }`}
-            >
-              {t === 'login' ? 'Ingresar' : 'Registrar clínica'}
-            </button>
-          ))}
+        <div className="mb-6 flex rounded-xl border border-border bg-muted/40 p-1">
+          <button
+            type="button"
+            onClick={() => setTab('login')}
+            className={`flex-1 rounded-lg py-2 text-sm font-semibold transition-all ${
+              tab === 'login' ? 'bg-card text-foreground shadow-sm' : 'text-muted-foreground'
+            }`}
+          >
+            Ingresar
+          </button>
+          <button
+            type="button"
+            onClick={() => setTab('register')}
+            className={`flex-1 rounded-lg py-2 text-sm font-semibold transition-all ${
+              tab === 'register' ? 'bg-card text-foreground shadow-sm' : 'text-muted-foreground'
+            }`}
+          >
+            Registrar clínica
+          </button>
         </div>
 
         {tab === 'login' ? (
-          <div className="animate-fade-in">
-            <h2 className="text-2xl font-bold">Bienvenida de nuevo</h2>
-            <p className="mt-1 text-sm text-muted-foreground">Ingresa al espacio de trabajo de tu clínica.</p>
+          <div>
+            <h2 className="text-2xl font-bold">Bienvenido de nuevo</h2>
+            <p className="mt-1 text-sm text-muted-foreground">Accede con tu cuenta de clínica o plataforma.</p>
+            <RequiredLegend />
 
-            {authError && (
-              <div className="mt-4 flex items-start gap-2 rounded-lg border border-destructive/30 bg-destructive/10 p-3 text-sm text-destructive" role="alert">
-                <Icon name="ExclamationTriangleIcon" size={18} />
-                <span>{authError}</span>
+            {authError ? (
+              <div className="mt-4 rounded-lg border border-destructive/30 bg-destructive/10 px-3 py-2 text-sm text-destructive">
+                {authError}
               </div>
-            )}
+            ) : null}
 
             <form onSubmit={handleSubmit(onSubmit)} className="mt-5 space-y-4" noValidate>
-              <RequiredLegend />
               <div>
-                <label htmlFor="email" className="mb-1.5 block text-sm font-semibold">Correo institucional<RequiredMark /></label>
+                <label htmlFor="email" className="mb-1.5 block text-sm font-semibold">
+                  Correo electrónico
+                  <RequiredMark />
+                </label>
                 <input
                   id="email"
                   type="email"
-                  autoComplete="email"
-                  placeholder="nombre@tuclinica.ec"
+                  autoComplete="username"
                   className={inputClass(!!errors.email)}
                   {...ariaFor('email', !!errors.email)}
                   {...register('email', {
-                    required: 'Ingresa tu correo institucional',
-                    validate: (v) => EMAIL_PATTERN.test(v.trim()) || 'El formato del correo no es válido',
+                    required: 'El correo es obligatorio',
+                    pattern: { value: EMAIL_PATTERN, message: 'Correo no válido' },
                   })}
                 />
                 <FieldError id="email" message={errors.email?.message} />
               </div>
 
               <div>
-                <div className="mb-1.5 flex items-center justify-between">
-                  <label htmlFor="password" className="block text-sm font-semibold">Contraseña<RequiredMark /></label>
-                  <button type="button" className="text-xs font-semibold text-primary hover:underline">¿Olvidaste tu contraseña?</button>
-                </div>
+                <label htmlFor="password" className="mb-1.5 block text-sm font-semibold">
+                  Contraseña
+                  <RequiredMark />
+                </label>
                 <div className="relative">
                   <input
                     id="password"
                     type={showPwd ? 'text' : 'password'}
                     autoComplete="current-password"
-                    placeholder="Mínimo 8 caracteres"
-                    className={inputClass(!!errors.password, 'pr-11')}
+                    className={inputClass(!!errors.password) + ' pr-10'}
                     {...ariaFor('password', !!errors.password)}
-                    {...register('password', { required: 'Ingresa tu contraseña', minLength: { value: 8, message: 'Debe tener al menos 8 caracteres' } })}
+                    {...register('password', { required: 'La contraseña es obligatoria' })}
                   />
                   <button
                     type="button"
                     onClick={() => setShowPwd((v) => !v)}
+                    className="absolute right-2 top-1/2 -translate-y-1/2 rounded p-1 text-muted-foreground hover:text-foreground"
                     aria-label={showPwd ? 'Ocultar contraseña' : 'Mostrar contraseña'}
-                    className="absolute right-2 top-1/2 -translate-y-1/2 rounded-md p-1.5 text-muted-foreground transition-colors hover:text-foreground"
                   >
                     <Icon name={showPwd ? 'EyeSlashIcon' : 'EyeIcon'} size={18} />
                   </button>
@@ -161,19 +166,6 @@ export default function AuthFormCard() {
               </button>
             </form>
 
-            <div className="my-5 flex items-center gap-3 text-xs text-muted-foreground">
-              <span className="h-px flex-1 bg-border" />
-              o continúa con
-              <span className="h-px flex-1 bg-border" />
-            </div>
-            <div className="grid grid-cols-2 gap-3">
-              {['Google Workspace', 'Microsoft 365'].map((p) => (
-                <button key={`sso-${p}`} className="rounded-lg border border-input bg-card py-2 text-sm font-semibold transition-colors hover:bg-muted active:scale-95">
-                  {p}
-                </button>
-              ))}
-            </div>
-
             <DemoCredentialsBox credentials={demoAccounts} onUse={useCredential} />
           </div>
         ) : (
@@ -181,8 +173,15 @@ export default function AuthFormCard() {
         )}
 
         <p className="mt-6 text-center text-xs text-muted-foreground">
-          Al continuar aceptas los <Link href="/sign-up-login-screen" className="font-semibold text-primary hover:underline">Términos del servicio</Link> y la{' '}
-          <Link href="/sign-up-login-screen" className="font-semibold text-primary hover:underline">Política de privacidad</Link>, conforme a la Ley Orgánica de Protección de Datos Personales.
+          Al continuar aceptas los{' '}
+          <Link href="/sign-up-login-screen" className="font-semibold text-primary hover:underline">
+            Términos del servicio
+          </Link>{' '}
+          y la{' '}
+          <Link href="/sign-up-login-screen" className="font-semibold text-primary hover:underline">
+            Política de privacidad
+          </Link>
+          , conforme a la Ley Orgánica de Protección de Datos Personales.
         </p>
       </div>
     </section>
