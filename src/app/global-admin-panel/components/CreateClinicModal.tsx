@@ -25,15 +25,17 @@ interface CreateClinicModalProps {
   onCreated: () => void;
 }
 
-const planMap: Record<string, string> = {
-  Inicial: 'inicial',
-  'Clínica Pro': 'pro',
-  'Red de clínicas': 'red',
-};
+function normalizePlan(plan: string): string {
+  const p = plan.toLowerCase().normalize('NFD').replace(/\p{M}/gu, '');
+  if (p.includes('inicial')) return 'inicial';
+  if (p.includes('red')) return 'red';
+  return 'pro';
+}
 
 export default function CreateClinicModal({ open, onClose, onCreated }: CreateClinicModalProps) {
   const [saving, setSaving] = useState(false);
   const [formError, setFormError] = useState('');
+  const [formOk, setFormOk] = useState('');
   const {
     register,
     handleSubmit,
@@ -41,22 +43,24 @@ export default function CreateClinicModal({ open, onClose, onCreated }: CreateCl
     formState: { errors },
   } = useForm<NewClinic>({
     mode: 'onTouched',
-    defaultValues: { plan: 'Clínica Pro', city: 'Quito', password: '' },
+    defaultValues: { plan: 'pro', city: 'Quito', password: '' },
   });
 
   useEffect(() => {
     if (open) {
-      reset({ plan: 'Clínica Pro', city: 'Quito', password: '' });
+      reset({ plan: 'pro', city: 'Quito', password: '' });
       setSaving(false);
       setFormError('');
+      setFormOk('');
     }
   }, [open, reset]);
 
   const submit = async (v: NewClinic) => {
     setSaving(true);
     setFormError('');
+    setFormOk('');
     try {
-      await registerClinic({
+      const res = await registerClinic({
         clinicName: v.name.trim(),
         ruc: v.ruc.trim(),
         mspCode: v.mspCode?.trim(),
@@ -64,13 +68,16 @@ export default function CreateClinicModal({ open, onClose, onCreated }: CreateCl
         adminName: v.adminName.trim(),
         adminEmail: v.adminEmail.trim(),
         phone: v.adminPhone?.trim(),
-        plan: planMap[v.plan] || 'pro',
+        plan: normalizePlan(v.plan),
         password: v.password,
+        createdBySuperAdmin: true,
       });
+      setFormOk(res.message);
       onCreated();
-      onClose();
+      // Cerrar tras breve aviso
+      setTimeout(() => onClose(), 1200);
     } catch (e: unknown) {
-      setFormError(e instanceof Error ? e.message : 'No se pudo crear la clínica');
+      setFormError(e instanceof Error ? e.message : 'No se pudo crear la clinica');
     } finally {
       setSaving(false);
     }
@@ -81,8 +88,8 @@ export default function CreateClinicModal({ open, onClose, onCreated }: CreateCl
       open={open}
       onClose={onClose}
       size="lg"
-      title="Crear nueva clínica"
-      subtitle="Crea usuario admin en Supabase Auth y llama a register_clinic (tenant real)."
+      title="Crear nueva clinica"
+      subtitle="Crea el admin en Auth y ejecuta register_clinic. Luego vuelve a entrar como admin global."
       footer={
         <>
           <button
@@ -101,10 +108,10 @@ export default function CreateClinicModal({ open, onClose, onCreated }: CreateCl
             {saving ? (
               <>
                 <Icon name="ArrowPathIcon" size={16} className="animate-spin" />
-                Creando…
+                Creando...
               </>
             ) : (
-              'Crear clínica'
+              'Crear clinica'
             )}
           </button>
         </>
@@ -118,11 +125,16 @@ export default function CreateClinicModal({ open, onClose, onCreated }: CreateCl
               {formError}
             </div>
           ) : null}
+          {formOk ? (
+            <div className="mt-2 rounded-lg border border-success/30 bg-success/10 px-3 py-2 text-sm text-success">
+              {formOk}
+            </div>
+          ) : null}
         </div>
 
         <div className="sm:col-span-2">
           <label className="mb-1.5 block text-sm font-semibold">
-            Nombre de la clínica
+            Nombre de la clinica
             <RequiredMark />
           </label>
           <input className={inputClass(!!errors.name)} {...ariaFor('name', !!errors.name)} {...register('name', { required: 'Obligatorio' })} />
@@ -138,7 +150,7 @@ export default function CreateClinicModal({ open, onClose, onCreated }: CreateCl
           <FieldError id="ruc" message={errors.ruc?.message} />
         </div>
         <div>
-          <label className="mb-1.5 block text-sm font-semibold">Código MSP</label>
+          <label className="mb-1.5 block text-sm font-semibold">Codigo MSP</label>
           <input className={inputClass(false)} {...register('mspCode')} />
         </div>
         <div>
@@ -148,9 +160,9 @@ export default function CreateClinicModal({ open, onClose, onCreated }: CreateCl
         <div>
           <label className="mb-1.5 block text-sm font-semibold">Plan</label>
           <select className={inputClass(false)} {...register('plan')}>
-            <option>Inicial</option>
-            <option>Clínica Pro</option>
-            <option>Red de clínicas</option>
+            <option value="inicial">Inicial</option>
+            <option value="pro">Clinica Pro</option>
+            <option value="red">Red de clinicas</option>
           </select>
         </div>
 
@@ -171,19 +183,15 @@ export default function CreateClinicModal({ open, onClose, onCreated }: CreateCl
           <FieldError id="adminEmail" message={errors.adminEmail?.message} />
         </div>
         <div>
-          <label className="mb-1.5 block text-sm font-semibold">Teléfono</label>
+          <label className="mb-1.5 block text-sm font-semibold">Telefono</label>
           <input className={inputClass(false)} {...register('adminPhone')} />
         </div>
         <div>
           <label className="mb-1.5 block text-sm font-semibold">
-            Contraseña inicial del admin
+            Contrasena inicial del admin
             <RequiredMark />
           </label>
-          <input
-            type="password"
-            className={inputClass(!!errors.password)}
-            {...register('password', rules.password)}
-          />
+          <input type="password" className={inputClass(!!errors.password)} {...register('password', rules.password)} />
           <FieldError id="password" message={errors.password?.message} />
         </div>
       </form>

@@ -33,6 +33,8 @@ const plans = [
 export default function RegisterClinicForm({ onDone }: RegisterClinicFormProps) {
   const [loading, setLoading] = useState(false);
   const [done, setDone] = useState(false);
+  const [info, setInfo] = useState('');
+  const [formError, setFormError] = useState('');
   const {
     register,
     handleSubmit,
@@ -44,8 +46,9 @@ export default function RegisterClinicForm({ onDone }: RegisterClinicFormProps) 
 
   const onSubmit = async (values: RegisterValues) => {
     setLoading(true);
+    setFormError('');
     try {
-      await registerClinic({
+      const res = await registerClinic({
         clinicName: values.clinicName,
         ruc: values.ruc,
         mspCode: values.mspCode,
@@ -55,11 +58,12 @@ export default function RegisterClinicForm({ onDone }: RegisterClinicFormProps) 
         phone: values.phone,
         plan: values.plan,
         password: values.password,
+        createdBySuperAdmin: false,
       });
+      setInfo(res.message);
       setDone(true);
     } catch (e: unknown) {
-      const msg = e instanceof Error ? e.message : 'Error al registrar la clinica';
-      alert(msg);
+      setFormError(e instanceof Error ? e.message : 'Error al registrar la clinica');
     } finally {
       setLoading(false);
     }
@@ -72,9 +76,7 @@ export default function RegisterClinicForm({ onDone }: RegisterClinicFormProps) 
           <Icon name="CheckIcon" size={26} />
         </span>
         <h3 className="text-lg font-bold">Clinica creada correctamente</h3>
-        <p className="mt-1 text-sm text-muted-foreground">
-          Revisa el correo del administrador si Supabase pide confirmacion. Luego inicia sesion.
-        </p>
+        <p className="mt-1 text-sm text-muted-foreground">{info}</p>
         <button
           onClick={onDone}
           className="mt-4 rounded-lg bg-primary px-4 py-2 text-sm font-semibold text-primary-foreground transition-all hover:opacity-90 active:scale-95"
@@ -89,9 +91,14 @@ export default function RegisterClinicForm({ onDone }: RegisterClinicFormProps) 
     <div className="animate-fade-in">
       <h2 className="text-2xl font-bold">Crear clinica</h2>
       <p className="mt-1 text-sm text-muted-foreground">
-        Provisiona el tenant con la funcion register_clinic de Supabase.
+        Crea el tenant con Auth + funcion register_clinic de Supabase.
       </p>
       <RequiredLegend />
+      {formError ? (
+        <div className="mt-3 rounded-lg border border-destructive/30 bg-destructive/10 px-3 py-2 text-sm text-destructive">
+          {formError}
+        </div>
+      ) : null}
 
       <form onSubmit={handleSubmit(onSubmit)} className="mt-5 space-y-4" noValidate>
         <div>
