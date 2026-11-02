@@ -13,7 +13,6 @@ import { hasSupabaseEnv } from '@/lib/supabase/client';
 interface LoginValues {
   email: string;
   password: string;
-  remember: boolean;
 }
 
 export default function AuthFormCard() {
@@ -22,19 +21,25 @@ export default function AuthFormCard() {
   const [showPwd, setShowPwd] = useState(false);
   const [loading, setLoading] = useState(false);
   const [authError, setAuthError] = useState('');
+  const [fails, setFails] = useState(0);
+  const [lockUntil, setLockUntil] = useState(0);
 
   const {
     register,
     handleSubmit,
     formState: { errors },
-  } = useForm<LoginValues>({ defaultValues: { email: '', password: '', remember: true } });
+  } = useForm<LoginValues>({ defaultValues: { email: '', password: '' } });
 
   const onSubmit = async (values: LoginValues) => {
     setAuthError('');
+    if (Date.now() < lockUntil) {
+      const secs = Math.ceil((lockUntil - Date.now()) / 1000);
+      setAuthError(`Demasiados intentos. Espera ${secs} segundos.`);
+      return;
+    }
     if (!hasSupabaseEnv()) {
-      setAuthError(
-        'Supabase no esta configurado. Define NEXT_PUBLIC_SUPABASE_URL y NEXT_PUBLIC_SUPABASE_ANON_KEY en Vercel o .env.local.',
-      );
+      console.error('[config] Faltan variables NEXT_PUBLIC_SUPABASE_*');
+      setAuthError('Servicio no disponible por el momento. Intenta mas tarde.');
       return;
     }
     setLoading(true);
@@ -48,6 +53,12 @@ export default function AuthFormCard() {
     } catch (e: unknown) {
       const msg = e instanceof Error ? e.message : 'No se pudo iniciar sesion';
       setAuthError(msg);
+      const n = fails + 1;
+      setFails(n);
+      if (n >= 5) {
+        setLockUntil(Date.now() + 30_000);
+        setFails(0);
+      }
     } finally {
       setLoading(false);
     }
@@ -85,7 +96,7 @@ export default function AuthFormCard() {
           <div>
             <h2 className="text-2xl font-bold">Bienvenido de nuevo</h2>
             <p className="mt-1 text-sm text-muted-foreground">
-              Accede con un usuario real de Supabase Auth (no cuentas de demostracion).
+              Ingresa con tu correo y contrasena.
             </p>
             <RequiredLegend />
 
@@ -95,10 +106,6 @@ export default function AuthFormCard() {
               </div>
             ) : null}
 
-            <div className="mt-4 rounded-lg border border-amber-500/30 bg-amber-500/10 px-3 py-2 text-xs text-amber-900">
-              Para entrar: crea el usuario en Supabase (Authentication - Users), o registra una clinica
-              aqui. Asigna el rol en app_metadata.role o en profiles.
-            </div>
 
             <form onSubmit={handleSubmit(onSubmit)} className="mt-5 space-y-4" noValidate>
               <div>
@@ -146,10 +153,6 @@ export default function AuthFormCard() {
                 <FieldError id="password" message={errors.password?.message} />
               </div>
 
-              <label className="flex items-center gap-2 text-sm">
-                <input type="checkbox" className="h-4 w-4 rounded border-input accent-primary" {...register('remember')} />
-                Mantener sesion iniciada en este equipo
-              </label>
 
               <button
                 type="submit"

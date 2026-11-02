@@ -42,8 +42,12 @@ export async function signInWithPassword({ email, password }: LoginInput) {
 export async function signInAndResolveHome(input: LoginInput) {
   await signInWithPassword(input);
   const user = await getSessionUser();
-  const href = user ? homeForRole(user.role) : '/';
-  return { user, href };
+  // Cuenta sin perfil activo, o sin clinica asignada (y que no sea admin global): no entra.
+  if (!user || (user.role !== 'super_admin' && !user.clinicId)) {
+    await getSupabase().auth.signOut();
+    throw new Error('Tu cuenta no tiene una clinica activa asignada. Contacta al administrador.');
+  }
+  return { user, href: homeForRole(user.role) };
 }
 
 export async function signOut() {
@@ -59,140 +63,67 @@ export async function getSession() {
   return data.session;
 }
 
-async function callRegisterClinicRpc(params: {
-  userId: string | null;
-  clinicName: string;
-  ruc: string;
-  mspCode: string | null;
-  city: string | null;
-  adminName: string;
-  adminEmail: string;
-  phone: string | null;
-  plan: string;
-}) {
+async function invokeClinicas(body: Record<string, unknown>) {
   const supabase = getSupabase();
-  const attempts: Record<string, unknown>[] = [
-    {
-      p_clinic_name: params.clinicName,
-      p_ruc: params.ruc,
-      p_msp_code: params.mspCode,
-      p_city: params.city,
-      p_admin_name: params.adminName,
-      p_admin_email: params.adminEmail,
-      p_phone: params.phone,
-      p_plan: params.plan,
-      p_user_id: params.userId,
-    },
-    {
-      clinic_name: params.clinicName,
-      ruc: params.ruc,
-      city: params.city,
-      admin_name: params.adminName,
-      admin_email: params.adminEmail,
-      phone: params.phone,
-      plan: params.plan,
-      user_id: params.userId,
-    },
-    {
-      p_nombre: params.clinicName,
-      p_ruc: params.ruc,
-      p_ciudad: params.city,
-      p_admin_nombre: params.adminName,
-      p_admin_email: params.adminEmail,
-      p_telefono: params.phone,
-      p_plan: params.plan,
-      p_user_id: params.userId,
-    },
-  ];
-
-  const errors: string[] = [];
-  for (const payload of attempts) {
-    const { data, error } = await supabase.rpc('register_clinic', payload);
-    if (!error) return data;
-    errors.push(error.message);
-    if (/could not find|does not exist|not find the function/i.test(error.message)) {
-      throw new Error(friendlyAuthError(error.message));
+  const { data, error } = await supabase.functions.invoke('clinicas', { body });
+  if (error) {
+    let msg = error.message || 'No se pudo completar la solicitud.';
+    try {
+      const ctx = (error as { context?: Response }).context;
+      const j = ctx ? await ctx.json() : null;
+      if (j?.error) msg = j.error;
+    } catch {
+      /* respuesta sin JSON: se deja el mensaje generico */
     }
+    throw new Error(friendlyAuthError(msg));
   }
-  throw new Error(friendlyAuthError(errors[errors.length - 1] || 'register_clinic fallo'));
+  if (data?.error) throw new Error(friendlyAuthError(data.error));
+  return data as { ok: boolean; clinic_id: string; user_id: string; plan: string; status: string };
 }
 
+/**
+ * Registro de clinica (Edge Function `clinicas`: admin + clinica + perfil en un solo paso,
+ * con rollback si algo falla; no usa signUp, asi que no toca la sesion del admin global):
+ * - createdBySuperAdmin: true  -> accion "crear": el servidor exige administrador global.
+ * - createdBySuperAdmin: false -> accion "registro_publico": sin sesion, con limite de intentos.
+ */
 export async function registerClinic(input: RegisterClinicInput) {
-  const supabase = getSupabase();
   const email = normalizeEmail(input.adminEmail);
-  const password = input.password;
+  const asGlobal = !!input.createdBySuperAdmin;
+  const minPass = asGlobal ? 6 : 8;
 
   if (!isValidEmail(email)) {
     throw new Error('Correo del administrador no valido. Ejemplo: nombre@gmail.com');
   }
-  if (!password || password.length < 8) {
-    throw new Error('La contrasena debe tener al menos 8 caracteres');
+  if (!input.password || input.password.length < minPass) {
+    throw new Error(`La contrasena debe tener al menos ${minPass} caracteres`);
   }
   if (!input.clinicName.trim() || !input.ruc.trim()) {
     throw new Error('Nombre de clinica y RUC son obligatorios');
   }
 
-  const { data: prevSessionData } = await supabase.auth.getSession();
-  const hadSession = !!prevSessionData.session;
-
-  let signUpData;
-  try {
-    const res = await supabase.auth.signUp({
-      email,
-      password,
-      options: {
-        data: {
-          full_name: input.adminName.trim(),
-          role: 'admin',
-          clinic_name: input.clinicName.trim(),
-        },
-        emailRedirectTo:
-          typeof window !== 'undefined'
-            ? `${window.location.origin}/sign-up-login-screen`
-            : undefined,
-      },
-    });
-    if (res.error) throw new Error(friendlyAuthError(res.error.message));
-    signUpData = res.data;
-  } catch (e: unknown) {
-    if (e instanceof Error) throw new Error(friendlyAuthError(e.message));
-    throw e;
-  }
-
-  const userId = signUpData.user?.id ?? null;
-
-  let clinicData: unknown;
-  try {
-    clinicData = await callRegisterClinicRpc({
-      userId,
-      clinicName: input.clinicName.trim(),
+  const data = await invokeClinicas({
+    action: asGlobal ? 'crear' : 'registro_publico',
+    clinica: {
+      name: input.clinicName.trim(),
       ruc: input.ruc.trim().replace(/\D/g, ''),
-      mspCode: input.mspCode?.trim() || null,
+      msp_code: input.mspCode?.trim() || null,
       city: input.city?.trim() || null,
-      adminName: input.adminName.trim(),
-      adminEmail: email,
+      plan: input.plan || 'inicial',
+    },
+    admin: {
+      full_name: input.adminName.trim(),
+      email,
       phone: input.phone?.trim() || null,
-      plan: input.plan || 'pro',
-    });
-  } catch (rpcErr) {
-    const extra = rpcErr instanceof Error ? rpcErr.message : 'Error en register_clinic';
-    throw new Error(
-      `${extra} (El usuario Auth pudo crearse: ${email}. Revisalo en Authentication > Users).`,
-    );
-  }
-
-  if (input.createdBySuperAdmin || hadSession) {
-    await supabase.auth.signOut();
-  }
+      password: input.password,
+    },
+  });
 
   return {
-    user: signUpData.user,
-    clinic: clinicData,
-    needsEmailConfirmation: !signUpData.session,
-    message: input.createdBySuperAdmin
-      ? 'Clinica creada. Vuelve a iniciar sesion como admin global.'
-      : signUpData.session
-        ? 'Clinica creada. Ya puedes usar el sistema con este admin.'
-        : 'Clinica creada. Confirma el email si Supabase lo exige, luego inicia sesion.',
+    user: { id: data.user_id },
+    clinic: data,
+    message: asGlobal
+      ? `Clinica creada. El administrador ya puede ingresar con ${email} y la contrasena que definiste.`
+      : 'Tu clinica y tu cuenta de administrador ya estan activas. Inicia sesion con el correo y la contrasena que acabas de definir.',
   };
 }

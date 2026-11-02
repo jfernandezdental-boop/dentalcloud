@@ -41,11 +41,7 @@ export default function AuthBrandPanel() {
         </ul>
       </div>
 
-      <div className="flex items-center gap-6 text-sm text-sidebar-foreground/70">
-        <span className="tabular"><strong className="text-lg text-sidebar-foreground">214</strong> clínicas activas</span>
-        <span className="tabular"><strong className="text-lg text-sidebar-foreground">1 482</strong> profesionales</span>
-        <span className="tabular"><strong className="text-lg text-sidebar-foreground">96 310</strong> pacientes</span>
-      </div>
+      <div />
     </section>
   );
 }

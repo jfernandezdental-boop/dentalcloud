@@ -9,75 +9,52 @@ export type SessionUser = {
   fullName: string;
   clinicId: string | null;
   clinicName: string | null;
+  clinicCity: string | null;
+  clinicPlan: string | null;
+  /** true solo para la clinica de demostracion (MSP-DEMO-*): unica que puede ver datos de ejemplo */
+  clinicIsDemo: boolean;
 };
 
-const PLATFORM_ADMIN_EMAILS = new Set(['jfernandez.dental@gmail.com']);
-
-/** Mapeo temporal email admin -> nombre clinica (hasta que profiles tenga el dato) */
-const EMAIL_CLINIC_HINT: Record<string, string> = {
-  'clinicaldentalela@gmail.com': 'Estudio dental Vittoria',
-  'admin.demo@sonrisaboreal.ec': 'Sonrisa Boreal',
-};
-
+/**
+ * La identidad sale SIEMPRE de la base de datos (tabla profiles + clinics, protegidas por RLS).
+ * Nunca se confia en user_metadata (el propio usuario puede editarlo al registrarse) ni en
+ * correos fijos en el codigo. Si el perfil no existe, esta inactivo o no se puede leer, no hay sesion.
+ */
 export async function getSessionUser(): Promise<SessionUser | null> {
   const supabase = getSupabase();
   const { data: authData, error } = await supabase.auth.getUser();
   if (error || !authData.user) return null;
-
   const user = authData.user;
-  const email = (user.email || '').toLowerCase();
-  const meta = {
-    ...(user.user_metadata || {}),
-    ...(user.app_metadata || {}),
-  } as Record<string, unknown>;
 
-  let role = normalizeRole(String(meta.role || meta.rol || meta.user_role || ''));
-  if (PLATFORM_ADMIN_EMAILS.has(email)) role = 'super_admin';
-  if (!meta.role && !meta.rol && email && !PLATFORM_ADMIN_EMAILS.has(email)) {
-    role = 'admin';
-  }
+  const { data: profile, error: pErr } = await supabase
+    .from('profiles')
+    .select('full_name, role_key, is_super_admin, clinic_id, active')
+    .eq('id', user.id)
+    .maybeSingle();
+  if (pErr || !profile || !profile.active) return null;
 
-  let fullName = String(meta.full_name || meta.name || meta.nombre || user.email || '');
-  let clinicId =
-    (meta.clinic_id as string) ||
-    (meta.consultorio_id as string) ||
-    (meta.tenant_id as string) ||
-    null;
-  let clinicName =
-    (meta.clinic_name as string) ||
-    (meta.clinica as string) ||
-    EMAIL_CLINIC_HINT[email] ||
-    null;
+  const isSuper = profile.is_super_admin === true;
+  const role: AppRole = isSuper ? 'super_admin' : profile.role_key ? normalizeRole(profile.role_key) : 'patient';
 
-  if (role === 'super_admin') {
-    clinicId = null;
-    clinicName = null;
-  }
+  let clinicId: string | null = null;
+  let clinicName: string | null = null;
+  let clinicCity: string | null = null;
+  let clinicPlan: string | null = null;
+  let clinicIsDemo = false;
 
-  try {
-    const { data: profile } = await supabase
-      .from('profiles')
-      .select('*')
-      .eq('id', user.id)
+  if (!isSuper && profile.clinic_id) {
+    clinicId = String(profile.clinic_id);
+    const { data: clinic } = await supabase
+      .from('clinics')
+      .select('name, city, plan, msp_code')
+      .eq('id', clinicId)
       .maybeSingle();
-
-    if (profile) {
-      const p = profile as Record<string, unknown>;
-      if (p.role || p.rol) role = normalizeRole(String(p.role || p.rol));
-      if (PLATFORM_ADMIN_EMAILS.has(email)) role = 'super_admin';
-      if (p.full_name || p.nombre || p.name)
-        fullName = String(p.full_name || p.nombre || p.name);
-      if (role !== 'super_admin' && (p.clinic_id || p.consultorio_id || p.tenant_id))
-        clinicId = String(p.clinic_id || p.consultorio_id || p.tenant_id);
-      if (role !== 'super_admin' && (p.clinic_name || p.clinica))
-        clinicName = String(p.clinic_name || p.clinica);
+    if (clinic) {
+      clinicName = clinic.name ?? null;
+      clinicCity = clinic.city ?? null;
+      clinicPlan = clinic.plan ?? null;
+      clinicIsDemo = String(clinic.msp_code || '').toUpperCase().startsWith('MSP-DEMO');
     }
-  } catch {
-    // profiles opcional
-  }
-
-  if (!clinicName && role !== 'super_admin') {
-    clinicName = EMAIL_CLINIC_HINT[email] || 'Mi clinica';
   }
 
   return {
@@ -85,8 +62,11 @@ export async function getSessionUser(): Promise<SessionUser | null> {
     email: user.email || '',
     role,
     roleLabel: ROLE_LABEL[role],
-    fullName,
+    fullName: String(profile.full_name || user.email || ''),
     clinicId,
     clinicName,
+    clinicCity,
+    clinicPlan,
+    clinicIsDemo,
   };
 }

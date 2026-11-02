@@ -1,5 +1,6 @@
 import React from 'react';
 import AppLayout from '@/components/AppLayout';
+import ClinicDataGate from '@/components/ClinicDataGate';
 import DashboardHeader from './components/DashboardHeader';
 import MetricsBentoGrid from './components/MetricsBentoGrid';
 import ChartsRow from './components/ChartsRow';
@@ -11,12 +12,14 @@ export default function ClinicDashboardPage() {
     <AppLayout>
       <div className="space-y-6">
         <DashboardHeader />
-        <MetricsBentoGrid />
-        <ChartsRow />
-        <div className="grid gap-6 xl:grid-cols-[1fr_380px]">
-          <ModuleTabs />
-          <WaitingRoomPanel />
-        </div>
+        <ClinicDataGate module="Dashboard">
+          <MetricsBentoGrid />
+          <ChartsRow />
+          <div className="grid gap-6 xl:grid-cols-[1fr_380px]">
+            <ModuleTabs />
+            <WaitingRoomPanel />
+          </div>
+        </ClinicDataGate>
       </div>
     </AppLayout>
   );

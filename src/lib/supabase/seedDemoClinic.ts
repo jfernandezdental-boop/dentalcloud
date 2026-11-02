@@ -6,6 +6,13 @@ import { getSupabase } from './client';
  * Los usuarios deben existir en Supabase Auth con estos correos/claves
  * y app_metadata.role + consultorio_id cuando register_clinic los enlace.
  */
+function randomPassword(): string {
+  const bytes = new Uint8Array(12);
+  crypto.getRandomValues(bytes);
+  const core = Array.from(bytes, (b) => 'abcdefghjkmnpqrstuvwxyz23456789'[b % 31]).join('');
+  return `Dc-${core}-9A`;
+}
+
 export const DEMO_CLINIC = {
   clinicName: 'Sonrisa Boreal',
   ruc: '1799999999001',
@@ -15,8 +22,8 @@ export const DEMO_CLINIC = {
   adminName: 'Mariana Rosero',
   adminEmail: 'admin.demo@sonrisaboreal.ec',
   phone: '0990000001',
-  password: 'ClinicaDemo#2026',
-} as const;
+  password: randomPassword(),
+};
 
 /** Cuentas de acceso de la clinica demo (crear en Auth o tras el alta) */
 export const DEMO_ACCESS = [
@@ -24,19 +31,19 @@ export const DEMO_ACCESS = [
     role: 'admin',
     label: 'Administrador de clinica',
     email: 'admin.demo@sonrisaboreal.ec',
-    password: 'ClinicaDemo#2026',
+    password: DEMO_CLINIC.password,
   },
   {
     role: 'doctor',
     label: 'Odontologo',
     email: 'doctor.demo@sonrisaboreal.ec',
-    password: 'DoctorDemo#2026',
+    password: randomPassword(),
   },
   {
     role: 'receptionist',
     label: 'Recepcion',
     email: 'recepcion.demo@sonrisaboreal.ec',
-    password: 'RecepcionDemo#2026',
+    password: randomPassword(),
   },
 ] as const;
 

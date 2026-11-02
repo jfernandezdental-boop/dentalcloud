@@ -9,15 +9,8 @@ interface TopbarProps {
   platformMode?: boolean;
 }
 
-const notificationsClinic = [
-  { id: 'ntf-001', text: 'Bot IA envió recordatorios', time: 'hace 8 min', tone: 'text-primary' },
-  { id: 'ntf-002', text: 'Laboratorio: corona lista', time: 'hace 32 min', tone: 'text-success' },
-];
-
-const notificationsPlatform = [
-  { id: 'ntf-p1', text: 'Nueva clínica pendiente de activación', time: 'hace 1 h', tone: 'text-primary' },
-  { id: 'ntf-p2', text: 'Uso de API dentro de límites', time: 'hace 3 h', tone: 'text-success' },
-];
+const notificationsClinic: { id: string; text: string; time: string; tone: string }[] = [];
+const notificationsPlatform: { id: string; text: string; time: string; tone: string }[] = [];
 
 export default function Topbar({ onOpenMobile, platformMode = false }: TopbarProps) {
   const [openNotif, setOpenNotif] = useState(false);
@@ -55,12 +48,6 @@ export default function Topbar({ onOpenMobile, platformMode = false }: TopbarPro
       )}
 
       <div className="ml-auto flex items-center gap-2">
-        {!platformMode && (
-          <span className="hidden items-center gap-1.5 rounded-full bg-success/15 px-3 py-1 text-xs font-semibold text-success md:inline-flex">
-            <span className="h-1.5 w-1.5 animate-pulse rounded-full bg-success" />
-            Bot IA activo
-          </span>
-        )}
         {platformMode && (
           <span className="hidden items-center gap-1.5 rounded-full bg-amber-500/15 px-3 py-1 text-xs font-semibold text-amber-700 md:inline-flex">
             Admin global
@@ -78,6 +65,9 @@ export default function Topbar({ onOpenMobile, platformMode = false }: TopbarPro
           </button>
           {openNotif && (
             <div className="absolute right-0 mt-2 w-72 rounded-xl border border-border bg-card p-2 shadow-lg">
+              {notifications.length === 0 && (
+                <p className="px-3 py-4 text-center text-sm text-muted-foreground">No tienes notificaciones.</p>
+              )}
               {notifications.map((n) => (
                 <div key={n.id} className="rounded-lg px-3 py-2 text-sm hover:bg-muted">
                   <p className={n.tone}>{n.text}</p>
