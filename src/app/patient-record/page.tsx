@@ -1,15 +1,11 @@
 import React from 'react';
 import AppLayout from '@/components/AppLayout';
-import PatientHeader from './components/PatientHeader';
-import PatientTabs from './components/PatientTabs';
+import PatientRecordWorkspace from './components/PatientRecordWorkspace';
 
 export default function PatientRecordPage() {
   return (
     <AppLayout>
-      <div className="space-y-5">
-        <PatientHeader />
-        <PatientTabs />
-      </div>
+      <PatientRecordWorkspace />
     </AppLayout>
   );
 }

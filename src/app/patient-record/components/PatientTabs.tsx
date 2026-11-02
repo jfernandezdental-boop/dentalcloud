@@ -8,6 +8,7 @@ import BudgetsTab from './tabs/BudgetsTab';
 import PrescriptionsTab from './tabs/PrescriptionsTab';
 import XraysTab from './tabs/XraysTab';
 import PaymentsTab from './tabs/PaymentsTab';
+import type { PatientListItem } from './PatientListPanel';
 
 const tabs = [
   { id: 'pt-profile', key: 'profile', label: 'Datos del paciente', icon: 'IdentificationIcon' },
@@ -21,7 +22,13 @@ const tabs = [
 
 type TabKey = (typeof tabs)[number]['key'];
 
-export default function PatientTabs() {
+export default function PatientTabs({
+  patient,
+  onProfileSaved,
+}: {
+  patient: PatientListItem;
+  onProfileSaved?: (values: Record<string, string>) => Promise<void> | void;
+}) {
   const [active, setActive] = useState<TabKey>('profile');
 
   return (
@@ -43,8 +50,8 @@ export default function PatientTabs() {
           </button>
         ))}
       </div>
-      <div className="animate-fade-in p-5" key={`ptab-${active}`}>
-        {active === 'profile' && <ProfileTab />}
+      <div className="animate-fade-in p-5" key={`ptab-${patient.id}-${active}`}>
+        {active === 'profile' && <ProfileTab patient={patient} onSaved={onProfileSaved} />}
         {active === 'hc' && <ClinicalHistoryTab />}
         {active === 'hist' && <TreatmentHistoryTab />}
         {active === 'bud' && <BudgetsTab />}
