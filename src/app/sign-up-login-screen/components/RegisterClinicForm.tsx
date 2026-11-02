@@ -94,7 +94,7 @@ export default function RegisterClinicForm({ onDone }: RegisterClinicFormProps) 
     <div className="animate-fade-in">
       <h2 className="text-2xl font-bold">Crea el espacio de tu clinica</h2>
       <p className="mt-1 text-sm text-muted-foreground">
-        Auth + funcion register_clinic de Supabase. Tu seras el administrador del tenant.
+        Crea tu clinica y tu cuenta de administrador en un solo paso.
       </p>
       <RequiredLegend />
       {formError ? (

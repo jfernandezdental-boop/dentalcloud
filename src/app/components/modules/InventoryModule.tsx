@@ -16,7 +16,7 @@ export default function InventoryModule() {
     <div className="space-y-4">
       <div className="grid gap-3 sm:grid-cols-3">
         <div className="rounded-xl border border-destructive/30 bg-destructive/10 p-4">
-          <p className="text-xs text-muted-foreground">Criticos (<= 50 % del minimo)</p>
+          <p className="text-xs text-muted-foreground">Criticos (&lt;= 50 % del minimo)</p>
           <p className="tabular text-2xl font-bold text-destructive">3</p>
         </div>
         <div className="rounded-xl border border-warning/30 bg-warning/10 p-4">
