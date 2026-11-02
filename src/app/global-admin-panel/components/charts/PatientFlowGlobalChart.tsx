@@ -33,9 +33,8 @@ export default function PatientFlowGlobalChart() {
       <div className="mb-4 flex items-start justify-between">
         <div>
           <h3 className="text-base font-semibold">Flujo de pacientes en la red</h3>
-          <p className="text-xs text-muted-foreground">Pacientes atendidos por semana y altas de clínicas</p>
+          <p className="text-xs text-muted-foreground">Pacientes atendidos por semana y altas de clinicas</p>
         </div>
-        <span className="rounded-full bg-warning/15 px-2.5 py-1 text-xs font-semibold text-warning">S3 oct: −10,9 % (feriado)</span>
       </div>
       <div className="h-72">
         <ResponsiveContainer width="100%" height="100%">
@@ -47,7 +46,7 @@ export default function PatientFlowGlobalChart() {
             <Tooltip content={<GTooltip />} />
             <Legend wrapperStyle={{ fontSize: 12 }} iconType="circle" />
             <Line yAxisId="left" type="monotone" dataKey="pacientes" name="Pacientes atendidos" stroke="var(--primary)" strokeWidth={2.5} dot={{ r: 3 }} />
-            <Line yAxisId="right" type="monotone" dataKey="nuevas" name="Clínicas nuevas" stroke="var(--accent)" strokeWidth={2} strokeDasharray="5 4" dot={{ r: 3 }} />
+            <Line yAxisId="right" type="monotone" dataKey="nuevas" name="Clinicas nuevas" stroke="var(--accent)" strokeWidth={2} strokeDasharray="5 4" dot={{ r: 3 }} />
           </LineChart>
         </ResponsiveContainer>
       </div>

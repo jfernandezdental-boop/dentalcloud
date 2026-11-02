@@ -6,17 +6,17 @@ const data = [
   { id: 'tc-1', name: 'Sonrisa Boreal', pacientes: 1284 },
   { id: 'tc-2', name: 'Dental Costa Azul', pacientes: 1176 },
   { id: 'tc-3', name: 'OdontoSierra', pacientes: 982 },
-  { id: 'tc-4', name: 'Clínica Perla', pacientes: 874 },
+  { id: 'tc-4', name: 'Clinica Perla', pacientes: 874 },
   { id: 'tc-5', name: 'Dentis Austro', pacientes: 611 },
-  { id: 'tc-6', name: 'Sonríe Manta', pacientes: 244 },
+  { id: 'tc-6', name: 'Sonrie Manta', pacientes: 244 },
 ];
 
 export default function TopClinicsChart() {
   return (
     <div className="rounded-2xl border border-border bg-card p-5">
       <div className="mb-4">
-        <h3 className="text-base font-semibold">Pacientes por clínica (octubre)</h3>
-        <p className="text-xs text-muted-foreground">Top 5 y clínica con menor actividad</p>
+        <h3 className="text-base font-semibold">Pacientes por clinica (octubre)</h3>
+        <p className="text-xs text-muted-foreground">Top 5 y clinica con menor actividad</p>
       </div>
       <div className="h-72">
         <ResponsiveContainer width="100%" height="100%">
