@@ -11,7 +11,7 @@ export type AppRole =
   | 'staff'
   | 'patient';
 
-/** Rutas de la app y quién puede entrar */
+/** Rutas de la app y quien puede entrar */
 export const ROUTE_ACCESS: Record<string, AppRole[]> = {
   '/': ['super_admin', 'admin', 'doctor', 'receptionist', 'staff'],
   '/doctor-agenda': ['super_admin', 'admin', 'doctor', 'receptionist'],
@@ -19,6 +19,7 @@ export const ROUTE_ACCESS: Record<string, AppRole[]> = {
   '/interactive-odontogram': ['super_admin', 'admin', 'doctor'],
   '/billing-statements': ['super_admin', 'admin', 'receptionist'],
   '/inventory-restock': ['super_admin', 'admin', 'staff'],
+  '/clinic-staff': ['super_admin', 'admin'],
   '/global-admin-panel': ['super_admin'],
   '/sign-up-login-screen': [
     'super_admin',
@@ -41,9 +42,9 @@ export const ROLE_HOME: Record<AppRole, string> = {
 
 export const ROLE_LABEL: Record<AppRole, string> = {
   super_admin: 'Admin global',
-  admin: 'Administrador de clínica',
-  doctor: 'Odontólogo',
-  receptionist: 'Recepción',
+  admin: 'Administrador de clinica',
+  doctor: 'Odontologo',
+  receptionist: 'Recepcion',
   staff: 'Personal',
   patient: 'Paciente',
 };
@@ -76,7 +77,6 @@ export function canAccessPath(role: AppRole, pathname: string): boolean {
   if (pathname.startsWith('/sign-up-login-screen')) return true;
   const exact = ROUTE_ACCESS[pathname];
   if (exact) return exact.includes(role);
-  // prefijos
   for (const [route, roles] of Object.entries(ROUTE_ACCESS)) {
     if (route !== '/' && pathname.startsWith(route)) return roles.includes(role);
   }
