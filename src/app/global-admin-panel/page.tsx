@@ -4,8 +4,11 @@ import React, { useEffect } from 'react';
 import { useRouter } from 'next/navigation';
 import AppLayout from '@/components/AppLayout';
 import AdminHeader from './components/AdminHeader';
+import AdminMetrics from './components/AdminMetrics';
+import AdminCharts from './components/AdminCharts';
 import ClinicsTable from './components/ClinicsTable';
 import RolesMatrix from './components/RolesMatrix';
+import UsersModule from './components/UsersModule';
 import SeedDemoButton from './components/SeedDemoButton';
 import { useAuth } from '@/components/AuthProvider';
 
@@ -37,14 +40,16 @@ export default function GlobalAdminPanelPage() {
       <div className="space-y-6">
         <AdminHeader />
         <div className="rounded-xl border border-amber-500/30 bg-amber-500/10 px-4 py-3 text-sm">
-          Panel de <strong>plataforma</strong>. La clinica demo se puede crear abajo; no se prioriza
-          en el ranking de tenants.
+          Panel de <strong>plataforma</strong>. Clinicas reales via Supabase; usuarios listados abajo son plantilla UI.
         </div>
+        <AdminMetrics />
+        <AdminCharts />
         <SeedDemoButton />
         <ClinicsTable />
         <div id="usuarios">
-          <RolesMatrix />
+          <UsersModule />
         </div>
+        <RolesMatrix />
       </div>
     </AppLayout>
   );
