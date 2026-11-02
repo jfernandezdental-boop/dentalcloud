@@ -1,7 +1,9 @@
 'use client';
-import React, { useState } from 'react';
+import React, { useMemo, useState } from 'react';
 import Icon from '@/components/ui/AppIcon';
 import Badge from '@/components/ui/Badge';
+import Modal from '@/components/ui/Modal';
+import Toast from '@/components/ui/Toast';
 
 interface Movement {
   id: string;
@@ -15,14 +17,9 @@ interface Movement {
   status: 'Cobrado' | 'Pagado' | 'Por cobrar' | 'Vencido';
 }
 
-const movements: Movement[] = [
-  { id: 'mov-001', date: '31/10/2026', type: 'Ingreso', concept: 'Profilaxis y fluor', party: 'Andrea Villacis', method: 'Tarjeta credito', doc: 'FAC 001-001-000004812', amount: 45, status: 'Cobrado' },
-  { id: 'mov-002', date: '31/10/2026', type: 'Ingreso', concept: 'Endodoncia pieza 36 (abono)', party: 'Marco Tulio Cevallos', method: 'Transferencia', doc: 'FAC 001-001-000004813', amount: 180, status: 'Cobrado' },
-  { id: 'mov-003', date: '31/10/2026', type: 'Ingreso', concept: 'Ortodoncia control mensual', party: 'Valentina Carrion', method: 'Efectivo', doc: 'FAC 001-001-000004814', amount: 60, status: 'Cobrado' },
-  { id: 'mov-004', date: '30/10/2026', type: 'Gasto', concept: 'Compra resina Filtek A2', party: 'DentalPro Ecuador', method: 'Transferencia', doc: 'FAC 003-002-000118220', amount: 212.8, status: 'Pagado' },
-  { id: 'mov-005', date: '30/10/2026', type: 'Ingreso', concept: 'Corona sobre implante 46 (saldo)', party: 'Ricardo Benitez', method: 'Pendiente', doc: 'PRF-2026-0388', amount: 640, status: 'Por cobrar' },
-  { id: 'mov-006', date: '28/10/2026', type: 'Gasto', concept: 'Arriendo local octubre', party: 'Inmobiliaria', method: 'Transferencia', doc: 'FAC 002-001-000009104', amount: 1450, status: 'Pagado' },
-  { id: 'mov-007', date: '22/10/2026', type: 'Ingreso', concept: 'Blanqueamiento sesion 2', party: 'Monica Altamirano', method: 'Pendiente', doc: 'PRF-2026-0371', amount: 120, status: 'Vencido' },
+const seed: Movement[] = [
+  { id: 'mov-001', date: '31/10/2026', type: 'Ingreso', concept: 'Profilaxis', party: 'Andrea Villacis', method: 'Efectivo', doc: 'FAC-001', amount: 45, status: 'Cobrado' },
+  { id: 'mov-002', date: '30/10/2026', type: 'Gasto', concept: 'Compra resina', party: 'DentalPro', method: 'Transferencia', doc: 'FAC-PROV-1', amount: 212.8, status: 'Pagado' },
 ];
 
 const statusTone: Record<Movement['status'], 'success' | 'info' | 'warning' | 'danger'> = {
@@ -34,25 +31,78 @@ const statusTone: Record<Movement['status'], 'success' | 'info' | 'warning' | 'd
 
 const filters = ['Todos', 'Ingreso', 'Gasto'] as const;
 
+function today() {
+  return new Date().toLocaleDateString('es-EC');
+}
+
 export default function FinanceModule() {
+  const [rows, setRows] = useState<Movement[]>(seed);
   const [filter, setFilter] = useState<(typeof filters)[number]>('Todos');
-  const rows = movements.filter((m) => filter === 'Todos' || m.type === filter);
+  const [open, setOpen] = useState(false);
+  const [toast, setToast] = useState('');
+  const [form, setForm] = useState({
+    type: 'Ingreso' as 'Ingreso' | 'Gasto',
+    concept: '',
+    party: '',
+    method: 'Efectivo',
+    doc: '',
+    amount: 0,
+    status: 'Cobrado' as Movement['status'],
+  });
+
+  const list = rows.filter((m) => filter === 'Todos' || m.type === filter);
+  const ingresos = useMemo(() => rows.filter((m) => m.type === 'Ingreso').reduce((a, m) => a + m.amount, 0), [rows]);
+  const gastos = useMemo(() => rows.filter((m) => m.type === 'Gasto').reduce((a, m) => a + m.amount, 0), [rows]);
+  const porCobrar = useMemo(
+    () => rows.filter((m) => m.type === 'Ingreso' && (m.status === 'Por cobrar' || m.status === 'Vencido')).reduce((a, m) => a + m.amount, 0),
+    [rows],
+  );
+
+  const save = () => {
+    if (!form.concept.trim() || !form.party.trim() || !(form.amount > 0)) {
+      setToast('Concepto, paciente/proveedor y monto son obligatorios');
+      return;
+    }
+    const status: Movement['status'] =
+      form.type === 'Gasto' ? 'Pagado' : form.status === 'Pagado' ? 'Cobrado' : form.status;
+    setRows((prev) => [
+      {
+        id: `mov-${Date.now()}`,
+        date: today(),
+        type: form.type,
+        concept: form.concept.trim(),
+        party: form.party.trim(),
+        method: form.method,
+        doc: form.doc.trim() || (form.type === 'Ingreso' ? `FAC-${Date.now() % 10000}` : `GAS-${Date.now() % 10000}`),
+        amount: Number(form.amount),
+        status,
+      },
+      ...prev,
+    ]);
+    setOpen(false);
+    setForm({ type: 'Ingreso', concept: '', party: '', method: 'Efectivo', doc: '', amount: 0, status: 'Cobrado' });
+    setToast('Movimiento registrado en finanzas');
+  };
 
   return (
     <div className="space-y-5">
       <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
-        {[
-          { id: 'fs-1', label: 'Ingresos octubre', value: '$24 860', tone: 'text-success', helper: '+12,3 % vs. sep.' },
-          { id: 'fs-2', label: 'Gastos octubre', value: '$15 480', tone: 'text-accent', helper: '-10,6 % vs. sep.' },
-          { id: 'fs-3', label: 'Utilidad neta', value: '$9 380', tone: 'text-primary', helper: 'Margen 37,7 %' },
-          { id: 'fs-4', label: 'Por cobrar', value: '$8 940', tone: 'text-destructive', helper: 'Incluye vencidos' },
-        ].map((s) => (
-          <div key={s.id} className="rounded-xl border border-border bg-background p-4">
-            <p className="text-xs font-medium text-muted-foreground">{s.label}</p>
-            <p className={`tabular mt-1 text-2xl font-bold ${s.tone}`}>{s.value}</p>
-            <p className="mt-0.5 text-xs text-muted-foreground">{s.helper}</p>
-          </div>
-        ))}
+        <div className="rounded-xl border border-border bg-background p-4">
+          <p className="text-xs text-muted-foreground">Ingresos</p>
+          <p className="tabular mt-1 text-2xl font-bold text-success">${ingresos.toFixed(2)}</p>
+        </div>
+        <div className="rounded-xl border border-border bg-background p-4">
+          <p className="text-xs text-muted-foreground">Gastos</p>
+          <p className="tabular mt-1 text-2xl font-bold text-accent">${gastos.toFixed(2)}</p>
+        </div>
+        <div className="rounded-xl border border-border bg-background p-4">
+          <p className="text-xs text-muted-foreground">Utilidad</p>
+          <p className="tabular mt-1 text-2xl font-bold text-primary">${(ingresos - gastos).toFixed(2)}</p>
+        </div>
+        <div className="rounded-xl border border-border bg-background p-4">
+          <p className="text-xs text-muted-foreground">Por cobrar</p>
+          <p className="tabular mt-1 text-2xl font-bold text-destructive">${porCobrar.toFixed(2)}</p>
+        </div>
       </div>
 
       <div className="flex flex-wrap items-center justify-between gap-3">
@@ -68,33 +118,33 @@ export default function FinanceModule() {
             </button>
           ))}
         </div>
-        <button type="button" className="inline-flex items-center gap-1.5 rounded-lg bg-primary px-3 py-1.5 text-xs font-semibold text-primary-foreground">
+        <button type="button" onClick={() => setOpen(true)} className="inline-flex items-center gap-1.5 rounded-lg bg-primary px-3 py-1.5 text-xs font-semibold text-primary-foreground">
           <Icon name="PlusIcon" size={14} />
           Registrar movimiento
         </button>
       </div>
 
-      <div className="overflow-x-auto rounded-xl border border-border scrollbar-thin">
+      <div className="overflow-x-auto rounded-xl border border-border">
         <table className="w-full min-w-[860px] text-left text-sm">
-          <thead className="bg-muted/60 text-xs uppercase tracking-wide text-muted-foreground">
+          <thead className="bg-muted/60 text-xs uppercase text-muted-foreground">
             <tr>
-              {['Fecha', 'Tipo', 'Concepto', 'Paciente / Proveedor', 'Forma de pago', 'Comprobante', 'Monto', 'Estado'].map((h) => (
+              {['Fecha', 'Tipo', 'Concepto', 'Paciente / Proveedor', 'Pago', 'Comprobante', 'Monto', 'Estado'].map((h) => (
                 <th key={h} className="px-4 py-2.5 font-semibold">{h}</th>
               ))}
             </tr>
           </thead>
           <tbody className="divide-y divide-border">
-            {rows.map((m) => (
+            {list.map((m) => (
               <tr key={m.id} className="hover:bg-muted/40">
-                <td className="tabular px-4 py-3">{m.date}</td>
+                <td className="px-4 py-3">{m.date}</td>
                 <td className="px-4 py-3">
                   <span className={`text-xs font-semibold ${m.type === 'Ingreso' ? 'text-success' : 'text-accent'}`}>{m.type}</span>
                 </td>
-                <td className="max-w-[220px] truncate px-4 py-3 font-medium">{m.concept}</td>
+                <td className="max-w-[200px] truncate px-4 py-3 font-medium">{m.concept}</td>
                 <td className="px-4 py-3">{m.party}</td>
                 <td className="px-4 py-3 text-muted-foreground">{m.method}</td>
-                <td className="tabular px-4 py-3 text-xs text-muted-foreground">{m.doc}</td>
-                <td className={`tabular px-4 py-3 text-right font-bold ${m.type === 'Gasto' ? 'text-accent' : ''}`}>
+                <td className="px-4 py-3 text-xs text-muted-foreground">{m.doc}</td>
+                <td className={`px-4 py-3 text-right font-bold ${m.type === 'Gasto' ? 'text-accent' : ''}`}>
                   {m.type === 'Gasto' ? '-' : ''}${m.amount.toFixed(2)}
                 </td>
                 <td className="px-4 py-3">
@@ -107,6 +157,47 @@ export default function FinanceModule() {
           </tbody>
         </table>
       </div>
+
+      <Modal
+        open={open}
+        onClose={() => setOpen(false)}
+        title="Registrar movimiento financiero"
+        subtitle="Ingreso o gasto de la clinica"
+        footer={
+          <>
+            <button type="button" onClick={() => setOpen(false)} className="rounded-lg border px-4 py-2 text-sm font-semibold">
+              Cancelar
+            </button>
+            <button type="button" onClick={save} className="rounded-lg bg-primary px-4 py-2 text-sm font-semibold text-primary-foreground">
+              Guardar
+            </button>
+          </>
+        }
+      >
+        <div className="grid gap-3 sm:grid-cols-2">
+          <select className="rounded-lg border px-3 py-2 text-sm" value={form.type} onChange={(e) => setForm({ ...form, type: e.target.value as 'Ingreso' | 'Gasto' })}>
+            <option value="Ingreso">Ingreso</option>
+            <option value="Gasto">Gasto</option>
+          </select>
+          <select className="rounded-lg border px-3 py-2 text-sm" value={form.method} onChange={(e) => setForm({ ...form, method: e.target.value })}>
+            {['Efectivo', 'Transferencia', 'Tarjeta', 'Cheque', 'Pendiente'].map((m) => (
+              <option key={m}>{m}</option>
+            ))}
+          </select>
+          <input className="rounded-lg border px-3 py-2 text-sm sm:col-span-2" placeholder="Concepto" value={form.concept} onChange={(e) => setForm({ ...form, concept: e.target.value })} />
+          <input className="rounded-lg border px-3 py-2 text-sm sm:col-span-2" placeholder="Paciente o proveedor" value={form.party} onChange={(e) => setForm({ ...form, party: e.target.value })} />
+          <input type="number" step="0.01" className="rounded-lg border px-3 py-2 text-sm" placeholder="Monto" value={form.amount || ''} onChange={(e) => setForm({ ...form, amount: Number(e.target.value) })} />
+          <input className="rounded-lg border px-3 py-2 text-sm" placeholder="N. comprobante (opcional)" value={form.doc} onChange={(e) => setForm({ ...form, doc: e.target.value })} />
+          {form.type === 'Ingreso' ? (
+            <select className="rounded-lg border px-3 py-2 text-sm sm:col-span-2" value={form.status} onChange={(e) => setForm({ ...form, status: e.target.value as Movement['status'] })}>
+              <option value="Cobrado">Cobrado</option>
+              <option value="Por cobrar">Por cobrar</option>
+              <option value="Vencido">Vencido</option>
+            </select>
+          ) : null}
+        </div>
+      </Modal>
+      {toast ? <Toast message={toast} onDone={() => setToast('')} /> : null}
     </div>
   );
 }
