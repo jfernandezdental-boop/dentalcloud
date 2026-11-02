@@ -11,20 +11,19 @@ interface Waiting {
   doctor: string;
   waited: number;
   slot: string;
-  status: 'En sala' | 'En atención' | 'Confirmada' | 'Pendiente';
+  status: 'En sala' | 'En atencion' | 'Confirmada' | 'Pendiente';
 }
 
 const initial: Waiting[] = [
-  { id: 'wr-001', patient: 'Jorge Luis Almeida', procedure: 'Resina pieza 14 y 15', doctor: 'Dra. Andrade', waited: 0, slot: '09:30', status: 'En atención' },
-  { id: 'wr-002', patient: 'Daniela Escobar Ruiz', procedure: 'Colocación de brackets', doctor: 'Dra. Villavicencio', waited: 18, slot: '10:00', status: 'En sala' },
-  { id: 'wr-003', patient: 'Patricio Naranjo León', procedure: 'Retratamiento de conducto', doctor: 'Dr. Moscoso', waited: 6, slot: '10:30', status: 'En sala' },
-  { id: 'wr-004', patient: 'Lucía Fernanda Mora', procedure: 'Valoración y proforma', doctor: 'Dra. Andrade', waited: 0, slot: '11:00', status: 'Confirmada' },
-  { id: 'wr-005', patient: 'Esteban Quishpe Yánez', procedure: 'Extracción pieza 48', doctor: 'Dra. Andrade', waited: 0, slot: '11:30', status: 'Confirmada' },
-  { id: 'wr-006', patient: 'Gabriela Salazar Pinto', procedure: 'Control post alineadores', doctor: 'Dra. Villavicencio', waited: 0, slot: '12:00', status: 'Pendiente' },
+  { id: 'wr-001', patient: 'Jorge Luis Almeida', procedure: 'Resina pieza 14 y 15', doctor: 'Dra. Andrade', waited: 0, slot: '09:30', status: 'En atencion' },
+  { id: 'wr-002', patient: 'Daniela Escobar Ruiz', procedure: 'Colocacion de brackets', doctor: 'Dra. Villavicencio', waited: 18, slot: '10:00', status: 'En sala' },
+  { id: 'wr-003', patient: 'Patricio Naranjo Leon', procedure: 'Retratamiento de conducto', doctor: 'Dr. Moscoso', waited: 6, slot: '10:30', status: 'En sala' },
+  { id: 'wr-004', patient: 'Lucia Fernanda Mora', procedure: 'Valoracion y proforma', doctor: 'Dra. Andrade', waited: 0, slot: '11:00', status: 'Confirmada' },
+  { id: 'wr-005', patient: 'Esteban Quishpe', procedure: 'Extraccion pieza 48', doctor: 'Dra. Andrade', waited: 0, slot: '11:30', status: 'Confirmada' },
 ];
 
 const tone: Record<Waiting['status'], 'success' | 'accent' | 'info' | 'warning'> = {
-  'En atención': 'success',
+  'En atencion': 'success',
   'En sala': 'accent',
   Confirmada: 'info',
   Pendiente: 'warning',
@@ -32,7 +31,7 @@ const tone: Record<Waiting['status'], 'success' | 'accent' | 'info' | 'warning'>
 
 export default function WaitingRoomPanel() {
   const [rows, setRows] = useState<Waiting[]>(initial);
-  const [removing, setRemoving] = useState<string>('');
+  const [removing, setRemoving] = useState('');
 
   const advance = (id: string) => {
     setRows((prev) =>
@@ -40,9 +39,9 @@ export default function WaitingRoomPanel() {
         if (r.id !== id) return r;
         if (r.status === 'Pendiente') return { ...r, status: 'Confirmada' };
         if (r.status === 'Confirmada') return { ...r, status: 'En sala' };
-        if (r.status === 'En sala') return { ...r, status: 'En atención' };
+        if (r.status === 'En sala') return { ...r, status: 'En atencion' };
         return r;
-      })
+      }),
     );
   };
 
@@ -61,7 +60,9 @@ export default function WaitingRoomPanel() {
           <h3 className="text-base font-semibold">Sala de espera y cola</h3>
           <p className="text-xs text-muted-foreground">{rows.length} pacientes por atender</p>
         </div>
-        <Badge tone="accent" dot>En vivo</Badge>
+        <Badge tone="accent" dot>
+          En vivo
+        </Badge>
       </div>
 
       {rows.length === 0 ? (
@@ -69,7 +70,7 @@ export default function WaitingRoomPanel() {
           <EmptyState
             icon={<Icon name="UserGroupIcon" size={24} />}
             title="No hay pacientes en cola"
-            description="Cuando se confirme una cita o un paciente llegue a recepción, aparecerá aquí."
+            description="Cuando se confirme una cita aparecera aqui."
             actionLabel="Agendar cita"
           />
         </div>
@@ -78,9 +79,7 @@ export default function WaitingRoomPanel() {
           {rows.map((r) => (
             <li
               key={r.id}
-              className={`group flex items-start gap-3 px-5 py-3.5 transition-all duration-300 hover:bg-muted/50 ${
-                removing === r.id ? 'max-h-0 opacity-0' : 'max-h-40 opacity-100'
-              }`}
+              className={`group flex items-start gap-3 px-5 py-3.5 hover:bg-muted/50 ${removing === r.id ? 'opacity-0' : 'opacity-100'}`}
             >
               <span className="mt-0.5 flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-primary/10 text-xs font-bold text-primary">
                 {r.patient
@@ -94,22 +93,21 @@ export default function WaitingRoomPanel() {
                   <p className="truncate text-sm font-semibold">{r.patient}</p>
                   <span className="tabular text-xs font-semibold text-muted-foreground">{r.slot}</span>
                 </div>
-                <p className="truncate text-xs text-muted-foreground">{r.procedure} · {r.doctor}</p>
+                <p className="truncate text-xs text-muted-foreground">
+                  {r.procedure} · {r.doctor}
+                </p>
                 <div className="mt-1.5 flex items-center gap-2">
                   <Badge tone={tone[r.status]}>{r.status}</Badge>
-                  {r.waited > 15 && (
-                    <span className="inline-flex items-center gap-1 text-xs font-semibold text-destructive">
-                      <Icon name="ClockIcon" size={12} />
-                      {r.waited} min esperando
-                    </span>
-                  )}
-                  <span className="ml-auto flex gap-1 opacity-0 transition-opacity group-hover:opacity-100">
-                    {r.status !== 'En atención' ? (
-                      <button onClick={() => advance(r.id)} aria-label="Avanzar estado" className="rounded-md bg-primary/10 p-1.5 text-primary transition-all hover:bg-primary hover:text-primary-foreground active:scale-95">
+                  {r.waited > 15 ? (
+                    <span className="text-xs font-semibold text-destructive">{r.waited} min</span>
+                  ) : null}
+                  <span className="ml-auto flex gap-1 opacity-0 group-hover:opacity-100">
+                    {r.status !== 'En atencion' ? (
+                      <button type="button" onClick={() => advance(r.id)} className="rounded-md bg-primary/10 p-1.5 text-primary">
                         <Icon name="ArrowRightIcon" size={14} />
                       </button>
                     ) : (
-                      <button onClick={() => finish(r.id)} aria-label="Finalizar atención" className="rounded-md bg-success/15 p-1.5 text-success transition-all hover:bg-success hover:text-success-foreground active:scale-95">
+                      <button type="button" onClick={() => finish(r.id)} className="rounded-md bg-success/15 p-1.5 text-success">
                         <Icon name="CheckIcon" size={14} />
                       </button>
                     )}
