@@ -11,11 +11,11 @@ import PaymentsTab from './tabs/PaymentsTab';
 
 const tabs = [
   { id: 'pt-profile', key: 'profile', label: 'Datos del paciente', icon: 'IdentificationIcon' },
-  { id: 'pt-hc', key: 'hc', label: 'Historia clínica MSP', icon: 'ClipboardDocumentListIcon' },
+  { id: 'pt-hc', key: 'hc', label: 'Historia clinica MSP', icon: 'ClipboardDocumentListIcon' },
   { id: 'pt-hist', key: 'hist', label: 'Historial', icon: 'ClockIcon' },
   { id: 'pt-bud', key: 'bud', label: 'Presupuestos', icon: 'DocumentTextIcon' },
   { id: 'pt-rx', key: 'rx', label: 'Recetario', icon: 'BeakerIcon' },
-  { id: 'pt-img', key: 'img', label: 'Radiografías', icon: 'PhotoIcon' },
+  { id: 'pt-img', key: 'img', label: 'Radiografias', icon: 'PhotoIcon' },
   { id: 'pt-pay', key: 'pay', label: 'Pagos', icon: 'BanknotesIcon' },
 ] as const;
 
@@ -30,6 +30,7 @@ export default function PatientTabs() {
         {tabs.map((t) => (
           <button
             key={t.id}
+            type="button"
             role="tab"
             aria-selected={active === t.key}
             onClick={() => setActive(t.key)}

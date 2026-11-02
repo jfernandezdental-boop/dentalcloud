@@ -24,6 +24,7 @@ export default function ModuleTabs() {
         {tabs.map((t) => (
           <button
             key={t.id}
+            type="button"
             role="tab"
             aria-selected={active === t.key}
             onClick={() => setActive(t.key)}
