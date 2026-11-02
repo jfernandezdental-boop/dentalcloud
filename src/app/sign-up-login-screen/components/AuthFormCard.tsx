@@ -4,16 +4,23 @@ import { useRouter } from 'next/navigation';
 import { useForm } from 'react-hook-form';
 import Icon from '@/components/ui/AppIcon';
 import AppLogo from '@/components/ui/AppLogo';
+import Link from 'next/link';
+import DemoCredentialsBox, { DemoCredential } from './DemoCredentialsBox';
 import RegisterClinicForm from './RegisterClinicForm';
 import { FieldError, RequiredMark, RequiredLegend, inputClass, ariaFor } from '@/components/ui/FormField';
-import { EMAIL_PATTERN } from '@/lib/validators';
+import { isValidEmail } from '@/lib/validators';
 import { signInAndResolveHome } from '@/lib/supabase/auth';
-import { hasSupabaseEnv } from '@/lib/supabase/client';
 
 interface LoginValues {
   email: string;
   password: string;
+  remember: boolean;
 }
+
+/** Solo autocompletan campos; el login siempre va a Supabase */
+const helperAccounts: DemoCredential[] = [
+  { id: 'cred-vittoria', role: 'Admin clinica (Vittoria)', email: 'clinicaldentalela@gmail.com', password: '' },
+];
 
 export default function AuthFormCard() {
   const router = useRouter();
@@ -21,27 +28,22 @@ export default function AuthFormCard() {
   const [showPwd, setShowPwd] = useState(false);
   const [loading, setLoading] = useState(false);
   const [authError, setAuthError] = useState('');
-  const [fails, setFails] = useState(0);
-  const [lockUntil, setLockUntil] = useState(0);
 
   const {
     register,
     handleSubmit,
+    setValue,
     formState: { errors },
-  } = useForm<LoginValues>({ defaultValues: { email: '', password: '' } });
+  } = useForm<LoginValues>({ defaultValues: { email: '', password: '', remember: true } });
+
+  const useCredential = (c: DemoCredential) => {
+    setValue('email', c.email, { shouldValidate: true });
+    if (c.password) setValue('password', c.password, { shouldValidate: true });
+    setAuthError('');
+  };
 
   const onSubmit = async (values: LoginValues) => {
     setAuthError('');
-    if (Date.now() < lockUntil) {
-      const secs = Math.ceil((lockUntil - Date.now()) / 1000);
-      setAuthError(`Demasiados intentos. Espera ${secs} segundos.`);
-      return;
-    }
-    if (!hasSupabaseEnv()) {
-      console.error('[config] Faltan variables NEXT_PUBLIC_SUPABASE_*');
-      setAuthError('Servicio no disponible por el momento. Intenta mas tarde.');
-      return;
-    }
     setLoading(true);
     try {
       const { href } = await signInAndResolveHome({
@@ -51,14 +53,7 @@ export default function AuthFormCard() {
       router.push(href);
       router.refresh();
     } catch (e: unknown) {
-      const msg = e instanceof Error ? e.message : 'No se pudo iniciar sesion';
-      setAuthError(msg);
-      const n = fails + 1;
-      setFails(n);
-      if (n >= 5) {
-        setLockUntil(Date.now() + 30_000);
-        setFails(0);
-      }
+      setAuthError(e instanceof Error ? e.message : 'No se pudo iniciar sesion');
     } finally {
       setLoading(false);
     }
@@ -67,47 +62,52 @@ export default function AuthFormCard() {
   return (
     <section className="flex items-center justify-center bg-background px-5 py-10 sm:px-10">
       <div className="w-full max-w-md animate-fade-in">
-        <div className="mb-8 flex items-center justify-center lg:hidden">
-          <AppLogo />
+        <div className="mb-6 flex items-center gap-2 lg:hidden">
+          <AppLogo size={36} />
+          <span className="text-xl font-bold">DentalCloud</span>
         </div>
 
-        <div className="mb-6 flex rounded-xl border border-border bg-muted/40 p-1">
-          <button
-            type="button"
-            onClick={() => setTab('login')}
-            className={`flex-1 rounded-lg py-2 text-sm font-semibold transition-all ${
-              tab === 'login' ? 'bg-card text-foreground shadow-sm' : 'text-muted-foreground'
-            }`}
-          >
-            Ingresar
-          </button>
-          <button
-            type="button"
-            onClick={() => setTab('register')}
-            className={`flex-1 rounded-lg py-2 text-sm font-semibold transition-all ${
-              tab === 'register' ? 'bg-card text-foreground shadow-sm' : 'text-muted-foreground'
-            }`}
-          >
-            Registrar clinica
-          </button>
+        <div className="mb-6 grid grid-cols-2 rounded-xl bg-muted p-1" role="tablist">
+          {(['login', 'register'] as const).map((t) => (
+            <button
+              key={`tab-${t}`}
+              type="button"
+              role="tab"
+              aria-selected={tab === t}
+              onClick={() => setTab(t)}
+              className={`rounded-lg py-2 text-sm font-semibold transition-all duration-150 ${
+                tab === t ? 'bg-card text-foreground shadow' : 'text-muted-foreground hover:text-foreground'
+              }`}
+            >
+              {t === 'login' ? 'Ingresar' : 'Registrar clinica'}
+            </button>
+          ))}
         </div>
 
         {tab === 'login' ? (
-          <div>
+          <div className="animate-fade-in">
             <h2 className="text-2xl font-bold">Bienvenido de nuevo</h2>
             <p className="mt-1 text-sm text-muted-foreground">
-              Ingresa con tu correo y contrasena.
+              Accede con un usuario real de Supabase Auth (no cuentas de demostracion).
             </p>
-            <RequiredLegend />
 
             {authError ? (
-              <div className="mt-4 rounded-lg border border-destructive/30 bg-destructive/10 px-3 py-2 text-sm text-destructive">
-                {authError}
+              <div
+                className="mt-4 flex items-start gap-2 rounded-lg border border-destructive/30 bg-destructive/10 p-3 text-sm text-destructive"
+                role="alert"
+              >
+                <Icon name="ExclamationTriangleIcon" size={18} />
+                <span>{authError}</span>
               </div>
             ) : null}
 
+            <div className="mt-3 rounded-lg border border-amber-500/30 bg-amber-500/10 px-3 py-2 text-xs text-amber-900 dark:text-amber-100">
+              Para entrar: crea el usuario en Supabase (Authentication - Users), o registra una clinica aqui.
+              Asigna el rol en app_metadata.role o profiles.
+            </div>
 
             <form onSubmit={handleSubmit(onSubmit)} className="mt-5 space-y-4" noValidate>
+              <RequiredLegend />
               <div>
                 <label htmlFor="email" className="mb-1.5 block text-sm font-semibold">
                   Correo electronico
@@ -116,36 +116,43 @@ export default function AuthFormCard() {
                 <input
                   id="email"
                   type="email"
-                  autoComplete="username"
+                  autoComplete="email"
+                  placeholder="nombre@tuclinica.ec"
                   className={inputClass(!!errors.email)}
                   {...ariaFor('email', !!errors.email)}
                   {...register('email', {
-                    required: 'El correo es obligatorio',
-                    pattern: { value: EMAIL_PATTERN, message: 'Correo no valido' },
+                    required: 'Ingresa tu correo',
+                    validate: (v) => isValidEmail(v) || 'El formato del correo no es valido',
                   })}
                 />
                 <FieldError id="email" message={errors.email?.message} />
               </div>
 
               <div>
-                <label htmlFor="password" className="mb-1.5 block text-sm font-semibold">
-                  Contrasena
-                  <RequiredMark />
-                </label>
+                <div className="mb-1.5 flex items-center justify-between">
+                  <label htmlFor="password" className="block text-sm font-semibold">
+                    Contrasena
+                    <RequiredMark />
+                  </label>
+                </div>
                 <div className="relative">
                   <input
                     id="password"
                     type={showPwd ? 'text' : 'password'}
                     autoComplete="current-password"
-                    className={inputClass(!!errors.password) + ' pr-10'}
+                    placeholder="Minimo 8 caracteres"
+                    className={inputClass(!!errors.password, 'pr-11')}
                     {...ariaFor('password', !!errors.password)}
-                    {...register('password', { required: 'La contrasena es obligatoria' })}
+                    {...register('password', {
+                      required: 'Ingresa tu contrasena',
+                      minLength: { value: 8, message: 'Debe tener al menos 8 caracteres' },
+                    })}
                   />
                   <button
                     type="button"
                     onClick={() => setShowPwd((v) => !v)}
-                    className="absolute right-2 top-1/2 -translate-y-1/2 rounded p-1 text-muted-foreground hover:text-foreground"
                     aria-label={showPwd ? 'Ocultar contrasena' : 'Mostrar contrasena'}
+                    className="absolute right-2 top-1/2 -translate-y-1/2 rounded-md p-1.5 text-muted-foreground hover:text-foreground"
                   >
                     <Icon name={showPwd ? 'EyeSlashIcon' : 'EyeIcon'} size={18} />
                   </button>
@@ -153,11 +160,15 @@ export default function AuthFormCard() {
                 <FieldError id="password" message={errors.password?.message} />
               </div>
 
+              <label className="flex items-center gap-2 text-sm">
+                <input type="checkbox" className="h-4 w-4 rounded border-input accent-primary" {...register('remember')} />
+                Mantener sesion iniciada en este equipo
+              </label>
 
               <button
                 type="submit"
                 disabled={loading}
-                className="flex w-full items-center justify-center gap-2 rounded-lg bg-primary py-2.5 text-sm font-semibold text-primary-foreground transition-all duration-150 hover:opacity-90 active:scale-95 disabled:cursor-not-allowed disabled:opacity-70"
+                className="flex w-full items-center justify-center gap-2 rounded-lg bg-primary py-2.5 text-sm font-semibold text-primary-foreground transition-all hover:opacity-90 active:scale-95 disabled:opacity-70"
               >
                 {loading ? (
                   <>
@@ -169,6 +180,8 @@ export default function AuthFormCard() {
                 )}
               </button>
             </form>
+
+            <DemoCredentialsBox credentials={helperAccounts} onUse={useCredential} />
           </div>
         ) : (
           <RegisterClinicForm onDone={() => setTab('login')} />
