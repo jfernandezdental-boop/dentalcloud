@@ -15,13 +15,14 @@ const tabs = [
   { id: 'tab-ntf', key: 'ntf', label: 'Notificaciones IA', icon: 'SparklesIcon' },
 ] as const;
 
-export default function ModuleTabs() {
-  const [active, setActive] = useState<(typeof tabs)[number]['key']>('fin');
+export default function ModuleTabs({ realOnly = false }: { realOnly?: boolean }) {
+  const visibleTabs = realOnly ? tabs.filter((t) => t.key === 'lab') : tabs;
+  const [active, setActive] = useState<(typeof tabs)[number]['key']>(realOnly ? 'lab' : 'fin');
 
   return (
     <section className="min-w-0 rounded-2xl border border-border bg-card">
       <div className="flex gap-1 overflow-x-auto border-b border-border px-3 pt-3 scrollbar-thin" role="tablist">
-        {tabs.map((t) => (
+        {visibleTabs.map((t) => (
           <button
             key={t.id}
             type="button"

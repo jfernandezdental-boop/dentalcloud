@@ -8,6 +8,10 @@ import BudgetsTab from './tabs/BudgetsTab';
 import PrescriptionsTab from './tabs/PrescriptionsTab';
 import XraysTab from './tabs/XraysTab';
 import PaymentsTab from './tabs/PaymentsTab';
+import RealBudgetsTab from './tabs/RealBudgetsTab';
+import RealPaymentsTab from './tabs/RealPaymentsTab';
+import EmptyState from '@/components/ui/EmptyState';
+import { useAuth } from '@/components/AuthProvider';
 import type { PatientListItem } from './PatientListPanel';
 
 const tabs = [
@@ -30,6 +34,15 @@ export default function PatientTabs({
   onProfileSaved?: (values: Record<string, string>) => Promise<void> | void;
 }) {
   const [active, setActive] = useState<TabKey>('profile');
+  const { user } = useAuth();
+  const demo = !!user?.clinicIsDemo;
+  const pending = (title: string) => (
+    <EmptyState
+      icon={<Icon name="ClockIcon" size={24} />}
+      title={`${title}: sin registros`}
+      description="Este paciente todavía no tiene información en esta sección."
+    />
+  );
 
   return (
     <section className="rounded-2xl border border-border bg-card">
@@ -52,12 +65,12 @@ export default function PatientTabs({
       </div>
       <div className="animate-fade-in p-5" key={`ptab-${patient.id}-${active}`}>
         {active === 'profile' && <ProfileTab patient={patient} onSaved={onProfileSaved} />}
-        {active === 'hc' && <ClinicalHistoryTab />}
-        {active === 'hist' && <TreatmentHistoryTab />}
-        {active === 'bud' && <BudgetsTab />}
-        {active === 'rx' && <PrescriptionsTab />}
-        {active === 'img' && <XraysTab />}
-        {active === 'pay' && <PaymentsTab />}
+        {active === 'hc' && (demo ? <ClinicalHistoryTab /> : pending('Historia clínica'))}
+        {active === 'hist' && (demo ? <TreatmentHistoryTab /> : pending('Historial'))}
+        {active === 'bud' && (demo ? <BudgetsTab /> : <RealBudgetsTab patientId={patient.id} />)}
+        {active === 'rx' && (demo ? <PrescriptionsTab /> : pending('Recetario'))}
+        {active === 'img' && (demo ? <XraysTab /> : pending('Radiografías'))}
+        {active === 'pay' && (demo ? <PaymentsTab /> : <RealPaymentsTab patientId={patient.id} />)}
       </div>
     </section>
   );
