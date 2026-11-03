@@ -43,54 +43,46 @@ function storageKey(clinicId: string) {
   return `dentalcloud_clinic_staff_${clinicId}`;
 }
 
+/** Ya no se guardan usuarios "locales": solo existe lo que esta en la base. Se limpia lo que dejo la version anterior. */
 export function listLocalStaff(clinicId: string): StaffMember[] {
-  if (typeof window === 'undefined' || !clinicId) return [];
-  try {
-    const raw = localStorage.getItem(storageKey(clinicId));
-    if (!raw) return [];
-    const parsed = JSON.parse(raw) as StaffMember[];
-    return Array.isArray(parsed) ? parsed : [];
-  } catch {
-    return [];
+  if (typeof window !== 'undefined' && clinicId) {
+    try {
+      localStorage.removeItem(storageKey(clinicId));
+    } catch {
+      /* sin acceso a storage */
+    }
   }
+  return [];
 }
 
-export function saveLocalStaff(clinicId: string, list: StaffMember[]) {
-  if (typeof window === 'undefined' || !clinicId) return;
-  localStorage.setItem(storageKey(clinicId), JSON.stringify(list));
-}
-
-/** Intenta listar perfiles de la clinica en Supabase (si la tabla profiles existe y RLS lo permite) */
+/** Equipo de la clinica: perfiles reales (RLS limita a tu clinica). */
 export async function listClinicStaffFromDb(clinicId: string): Promise<StaffMember[]> {
   if (!clinicId) return [];
-  const supabase = getSupabase();
-  const { data, error } = await supabase
+  const { data, error } = await getSupabase()
     .from('profiles')
-    .select('id, full_name, email, phone, role, active, created_at')
-    .eq('consultorio_id', clinicId)
+    .select('id, full_name, email, phone, role_key, active, created_at')
+    .eq('clinic_id', clinicId)
     .order('created_at', { ascending: false });
-
-  if (error || !data) {
-    // intentar columna clinic_id
-    const alt = await supabase
-      .from('profiles')
-      .select('id, full_name, email, phone, role, active, created_at')
-      .eq('clinic_id', clinicId)
-      .order('created_at', { ascending: false });
-    if (alt.error || !alt.data) return [];
-    return alt.data.map(mapProfile);
-  }
+  if (error || !data) return [];
   return data.map(mapProfile);
 }
 
+const DB_ROLE_TO_APP: Record<string, ClinicStaffRole> = {
+  admin: 'admin',
+  odontologo: 'doctor',
+  recepcion: 'receptionist',
+  auxiliar: 'staff',
+  contador: 'staff',
+};
+
 function mapProfile(row: Record<string, unknown>): StaffMember {
-  const role = String(row.role || 'staff') as ClinicStaffRole;
+  const role = DB_ROLE_TO_APP[String(row.role_key || '')] || 'staff';
   return {
     id: String(row.id),
     fullName: String(row.full_name || ''),
     email: String(row.email || ''),
     phone: row.phone ? String(row.phone) : undefined,
-    role: ['admin', 'doctor', 'receptionist', 'staff'].includes(role) ? role : 'staff',
+    role,
     roleLabel: ROLE_LABEL[role as AppRole] || role,
     active: row.active !== false,
     createdAt: String(row.created_at || '').slice(0, 10),
@@ -111,64 +103,33 @@ export async function inviteClinicStaff(input: InviteStaffInput): Promise<{ memb
   }
   if (!input.clinicId) throw new Error('No hay clinica activa en la sesion');
 
-  const supabase = getSupabase();
-  try {
-    const { data, error } = await supabase.functions.invoke('clinicas', {
-      body: {
-        action: 'invitar_personal',
-        clinic_id: input.clinicId,
-        consultorio_id: input.clinicId,
-        user: {
-          full_name: input.fullName.trim(),
-          email,
-          phone: input.phone?.trim() || null,
-          password: input.password,
-          role: input.role,
-        },
-      },
-    });
-    if (!error && data && !data.error) {
-      const member: StaffMember = {
-        id: String(data.user_id || data.id || `srv-${Date.now()}`),
-        fullName: input.fullName.trim(),
+  const { data, error } = await getSupabase().functions.invoke('clinicas', {
+    body: {
+      action: 'invitar_personal',
+      clinic_id: input.clinicId,
+      user: {
+        full_name: input.fullName.trim(),
         email,
-        phone: input.phone,
+        phone: input.phone?.trim() || null,
+        password: input.password,
         role: input.role,
-        roleLabel: ROLE_LABEL[input.role],
-        active: true,
-        createdAt: new Date().toISOString().slice(0, 10),
-        source: 'server',
-      };
-      const local = listLocalStaff(input.clinicId).filter((m) => m.email !== email);
-      saveLocalStaff(input.clinicId, [member, ...local]);
-      return {
-        member,
-        message: `Usuario creado. Ya puede ingresar con ${email}.`,
-      };
+      },
+    },
+  });
+  if (error) {
+    let msg = error.message || 'No se pudo crear el usuario';
+    try {
+      const j = await (error as { context?: Response }).context?.json();
+      if (j?.error) msg = j.error;
+    } catch {
+      /* sin cuerpo JSON */
     }
-    if (error) {
-      // sigue a fallback si accion no existe
-      const msg = error.message || '';
-      if (!/not found|404|invalid|unknown action|invitar/i.test(msg)) {
-        throw new Error(friendlyAuthError(msg));
-      }
-    }
-    if (data?.error) {
-      const msg = String(data.error);
-      if (!/not found|unknown action|invitar|no implement/i.test(msg)) {
-        throw new Error(friendlyAuthError(msg));
-      }
-    }
-  } catch (e: unknown) {
-    if (e instanceof Error && !/failed to fetch|404|not found/i.test(e.message)) {
-      // si es error de negocio real, relanzar
-      if (!/unknown action|invitar/i.test(e.message)) throw e;
-    }
+    throw new Error(friendlyAuthError(msg));
   }
+  if (data?.error) throw new Error(friendlyAuthError(String(data.error)));
 
-  // Fallback local (UI operativa hasta que Edge Function soporte invitar_personal)
   const member: StaffMember = {
-    id: `local-${Date.now()}`,
+    id: String(data.user_id),
     fullName: input.fullName.trim(),
     email,
     phone: input.phone,
@@ -176,14 +137,7 @@ export async function inviteClinicStaff(input: InviteStaffInput): Promise<{ memb
     roleLabel: ROLE_LABEL[input.role],
     active: true,
     createdAt: new Date().toISOString().slice(0, 10),
-    source: 'local',
+    source: 'server',
   };
-  saveLocalStaff(input.clinicId, [member, ...listLocalStaff(input.clinicId)]);
-  return {
-    member,
-    message:
-      `Personal registrado en la clinica (vista local). ` +
-      `Para login real en Supabase Auth, la Edge Function clinicas debe soportar action "invitar_personal" ` +
-      `(rol ${input.role}, correo ${email}).`,
-  };
+  return { member, message: `Usuario creado. Ya puede ingresar con ${email}.` };
 }

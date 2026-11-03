@@ -27,7 +27,7 @@ function mapPatient(row: Record<string, unknown>): PatientListItem {
     fullName,
     firstName: first || fullName.split(' ')[0] || '',
     lastName: last || fullName.split(' ').slice(1).join(' ') || '',
-    document: String(row.document || row.cedula || row.national_id || row.rut || ''),
+    document: String(row.cedula || row.document || row.national_id || row.rut || ''),
     phone: String(row.phone || row.mobile || row.celular || ''),
     email: String(row.email || ''),
     sex: String(row.sex || row.gender || row.sexo || ''),
@@ -37,7 +37,7 @@ function mapPatient(row: Record<string, unknown>): PatientListItem {
     insurance: String(row.insurance || row.seguro || ''),
     allergies: String(row.allergies || row.alergias || ''),
     bloodType: String(row.blood_type || row.grupo_sanguineo || ''),
-    emergencyName: String(row.emergency_contact || row.contacto_emergencia || ''),
+    emergencyName: String(row.emergency_name || row.emergency_contact || row.contacto_emergencia || ''),
     emergencyPhone: String(row.emergency_phone || ''),
     occupation: String(row.occupation || row.ocupacion || ''),
     civil: String(row.civil_status || row.estado_civil || ''),
@@ -100,29 +100,29 @@ export default function PatientRecordWorkspace() {
       return;
     }
     const fullName = `${p.firstName.trim()} ${p.lastName.trim()}`.trim();
+    if (!user?.clinicId) {
+      setToast('No hay una clinica activa en tu sesion. Cierra sesion y vuelve a entrar.');
+      return;
+    }
+    // Columnas reales de la tabla patients (clinic_id es obligatorio; RLS exige que sea tu clinica).
     const payload: Record<string, unknown> = {
+      clinic_id: user.clinicId,
       first_name: p.firstName.trim(),
       last_name: p.lastName.trim(),
-      full_name: fullName,
-      name: fullName,
-      document: p.cedula,
-      cedula: p.cedula,
+      cedula: p.cedula.trim(),
       birth_date: p.birthDate || null,
       sex: p.sex,
-      phone: p.phone,
-      email: p.email || null,
-      address: p.address || null,
+      phone: p.phone.trim(),
+      email: p.email.trim() || null,
+      address: p.address.trim() || null,
       insurance: p.insurance || null,
-      allergies: p.allergies || null,
-      emergency_contact: p.emergencyContact || null,
+      allergies: p.allergies.trim() || null,
+      emergency_name: p.emergencyContact.trim() || null,
     };
-    if (user?.clinicId) {
-      payload.consultorio_id = user.clinicId;
-      payload.clinic_id = user.clinicId;
-    }
     const { data, error } = await getSupabase().from('patients').insert(payload).select('*').maybeSingle();
     if (error) {
-      setToast(`No se pudo registrar: ${error.message}`);
+      const dup = /duplicate|unique/i.test(error.message);
+      setToast(dup ? 'Ya existe un paciente con esa cedula en tu clinica.' : `No se pudo registrar: ${error.message}`);
       return;
     }
     setOpenNew(false);
@@ -135,26 +135,22 @@ export default function PatientRecordWorkspace() {
 
   const handleProfileSaved = async (values: Record<string, string>) => {
     if (!selected || !hasSupabaseEnv()) return;
-    const fullName = `${values.firstName} ${values.lastName}`.trim();
     const payload: Record<string, unknown> = {
-      first_name: values.firstName,
-      last_name: values.lastName,
-      full_name: fullName,
-      name: fullName,
-      document: values.cedula,
-      cedula: values.cedula,
+      first_name: values.firstName.trim(),
+      last_name: values.lastName.trim(),
+      cedula: values.cedula.trim(),
       birth_date: values.birth || null,
       sex: values.sex,
-      phone: values.phone,
-      email: values.email || null,
-      address: values.address || null,
-      city: values.city || null,
+      phone: values.phone.trim(),
+      email: values.email.trim() || null,
+      address: values.address.trim() || null,
+      city: values.city.trim() || null,
       insurance: values.insurance || null,
-      allergies: values.allergies || null,
+      allergies: values.allergies.trim() || null,
       blood_type: values.bloodType || null,
-      emergency_contact: values.emergencyName || null,
-      emergency_phone: values.emergencyPhone || null,
-      occupation: values.occupation || null,
+      emergency_name: values.emergencyName.trim() || null,
+      emergency_phone: values.emergencyPhone.trim() || null,
+      occupation: values.occupation.trim() || null,
       civil_status: values.civil || null,
     };
     const { error } = await getSupabase().from('patients').update(payload).eq('id', selected.id);

@@ -43,17 +43,14 @@ function patientLabel(p: Record<string, unknown>): string {
     [p.first_name, p.last_name].filter(Boolean).join(' ') ||
     (p.name as string) ||
     'Paciente';
-  const doc = (p.document as string) || (p.cedula as string) || (p.national_id as string) || '';
+  const doc = (p.cedula as string) || (p.document as string) || (p.national_id as string) || '';
   return doc ? `${full} · ${doc}` : full;
 }
 
 function mapOrder(row: Record<string, unknown>): LabOrder {
-  const statusRaw = String(row.status || 'pending').toLowerCase();
-  let status: LabStatus = 'Falta procesar';
-  if (statusRaw.includes('process') || statusRaw.includes('proces')) status = 'Procesado';
-  if (statusRaw.includes('ajust') || statusRaw.includes('done') || statusRaw.includes('complet')) {
-    status = 'Ajuste correcto';
-  }
+  // La base guarda exactamente estos tres estados (constraint lab_orders_status_check).
+  const statusRaw = String(row.status || 'Falta procesar');
+  const status: LabStatus = (flow as string[]).includes(statusRaw) ? (statusRaw as LabStatus) : 'Falta procesar';
   const patientName =
     (row.patient_name as string) ||
     (row.patient as string) ||
@@ -105,7 +102,7 @@ export default function LabModule() {
           (pRows as Record<string, unknown>[]).map((p) => ({
             id: String(p.id),
             label: patientLabel(p),
-            document: String(p.document || p.cedula || p.national_id || ''),
+            document: String(p.cedula || p.document || p.national_id || ''),
           })),
         );
         setOrders((oRows as Record<string, unknown>[]).map(mapOrder));
@@ -139,15 +136,11 @@ export default function LabModule() {
     setOrders((prev) => prev.map((o) => (o.id === id ? { ...o, status: nextStatus, late: false } : o)));
     if (hasSupabaseEnv()) {
       try {
-        const statusDb =
-          nextStatus === 'Falta procesar'
-            ? 'pending'
-            : nextStatus === 'Procesado'
-              ? 'processed'
-              : 'completed';
-        await getSupabase().from('lab_orders').update({ status: statusDb }).eq('id', id);
+        const { error } = await getSupabase().from('lab_orders').update({ status: nextStatus }).eq('id', id);
+        if (error) throw error;
       } catch {
-        /* UI ya actualizada */
+        setOrders((prev) => prev.map((o) => (o.id === id ? { ...o, status: current.status } : o)));
+        setToast('No se pudo cambiar el estado. Intenta de nuevo.');
       }
     }
   };
@@ -169,46 +162,38 @@ export default function LabModule() {
 
     setSaving(true);
     try {
-      const code = `LAB-${new Date().getFullYear()}-${String(Date.now()).slice(-4)}`;
+        if (!user?.clinicId) {
+        setToast('No hay una clinica activa en tu sesion. Cierra sesion y vuelve a entrar.');
+        setSaving(false);
+        return;
+      }
+      // Columnas reales de lab_orders: clinic_id, patient_id, code, piece, type, lab, sent_at, due_at, status.
+      const code = `LAB-${new Date().getFullYear()}-${String(Date.now()).slice(-6)}`;
       const payload: Record<string, unknown> = {
+        clinic_id: user.clinicId,
         patient_id: form.patientId,
-        piece: form.piece.trim() || null,
-        work_type: form.type.trim(),
-        type: form.type.trim(),
-        description: form.type.trim(),
-        lab_name: form.lab.trim() || 'Laboratorio',
-        laboratory: form.lab.trim() || 'Laboratorio',
-        due_date: form.due || null,
-        status: 'pending',
         code,
-        order_code: code,
+        piece: form.piece.trim() || null,
+        type: form.type.trim(),
+        lab: form.lab.trim() || 'Laboratorio',
+        sent_at: new Date().toISOString().slice(0, 10),
+        due_at: form.due || null,
+        status: 'Falta procesar',
       };
-      if (user?.clinicId) {
-        payload.consultorio_id = user.clinicId;
-        payload.clinic_id = user.clinicId;
-      }
 
-      let createdId = `local-${Date.now()}`;
-      if (hasSupabaseEnv()) {
-        const { data, error } = await getSupabase().from('lab_orders').insert(payload).select('*').maybeSingle();
-        if (error) {
-          // reintento minimo con columnas mas comunes
-          const minimal = {
-            patient_id: form.patientId,
-            description: form.type.trim(),
-            status: 'pending',
-          };
-          const retry = await getSupabase().from('lab_orders').insert(minimal).select('*').maybeSingle();
-          if (retry.error) {
-            setToast(`No se pudo guardar en BD: ${error.message}. Revisa columnas de lab_orders.`);
-            setSaving(false);
-            return;
-          }
-          if (retry.data) createdId = String((retry.data as { id: string }).id);
-        } else if (data) {
-          createdId = String((data as { id: string }).id);
-        }
+      let createdId = '';
+      if (!hasSupabaseEnv()) {
+        setToast('Servicio no disponible por el momento.');
+        setSaving(false);
+        return;
       }
+      const { data, error } = await getSupabase().from('lab_orders').insert(payload).select('id').maybeSingle();
+      if (error || !data) {
+        setToast(`No se pudo guardar la orden: ${error?.message || 'sin respuesta'}`);
+        setSaving(false);
+        return;
+      }
+      createdId = String((data as { id: string }).id);
 
       setOrders((prev) => [
         {
