@@ -9,13 +9,13 @@ export default function DashboardHeader() {
   const [range, setRange] = useState('Hoy');
   const ranges = ['Hoy', '7 dias', 'Mes'];
   const clinic = user?.clinicName || 'Mi clinica';
-  const name = (user?.fullName || 'Usuario').split(' ')[0];
+  const name = (user?.fullName || '').trim();
 
   return (
     <div className="flex flex-wrap items-end justify-between gap-4">
       <div>
         <p className="text-sm font-medium text-muted-foreground">{clinic}</p>
-        <h1 className="mt-1 text-2xl font-semibold">Buenos dias, {name}</h1>
+        <h1 className="mt-1 text-2xl font-semibold">Buenos dias{name ? `, ${name}` : ''}</h1>
         <p className="mt-1 flex items-center gap-2 text-sm text-muted-foreground">
           <span className="inline-flex h-2 w-2 animate-pulse rounded-full bg-success" />
           Panel operativo de la clinica

@@ -245,7 +245,7 @@ export default function PatientRecordWorkspace() {
                 Odontograma
               </Link>
               <Link
-                href="/doctor-agenda"
+                href={selected ? `/doctor-agenda?patient=${selected.id}` : '/doctor-agenda'}
                 className="inline-flex items-center gap-2 rounded-lg border border-input px-4 py-2.5 text-sm font-semibold"
               >
                 <Icon name="CalendarDaysIcon" size={16} />

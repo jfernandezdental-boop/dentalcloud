@@ -10,6 +10,9 @@ import XraysTab from './tabs/XraysTab';
 import PaymentsTab from './tabs/PaymentsTab';
 import RealBudgetsTab from './tabs/RealBudgetsTab';
 import RealPaymentsTab from './tabs/RealPaymentsTab';
+import RealClinicalHistoryTab from './tabs/RealClinicalHistoryTab';
+import RealPrescriptionsTab from './tabs/RealPrescriptionsTab';
+import RealHistoryTab from './tabs/RealHistoryTab';
 import EmptyState from '@/components/ui/EmptyState';
 import { useAuth } from '@/components/AuthProvider';
 import type { PatientListItem } from './PatientListPanel';
@@ -65,10 +68,10 @@ export default function PatientTabs({
       </div>
       <div className="animate-fade-in p-5" key={`ptab-${patient.id}-${active}`}>
         {active === 'profile' && <ProfileTab patient={patient} onSaved={onProfileSaved} />}
-        {active === 'hc' && (demo ? <ClinicalHistoryTab /> : pending('Historia clínica'))}
-        {active === 'hist' && (demo ? <TreatmentHistoryTab /> : pending('Historial'))}
+        {active === 'hc' && (demo ? <ClinicalHistoryTab /> : <RealClinicalHistoryTab patientId={patient.id} />)}
+        {active === 'hist' && (demo ? <TreatmentHistoryTab /> : <RealHistoryTab patientId={patient.id} />)}
         {active === 'bud' && (demo ? <BudgetsTab /> : <RealBudgetsTab patientId={patient.id} />)}
-        {active === 'rx' && (demo ? <PrescriptionsTab /> : pending('Recetario'))}
+        {active === 'rx' && (demo ? <PrescriptionsTab /> : <RealPrescriptionsTab patientId={patient.id} />)}
         {active === 'img' && (demo ? <XraysTab /> : pending('Radiografías'))}
         {active === 'pay' && (demo ? <PaymentsTab /> : <RealPaymentsTab patientId={patient.id} />)}
       </div>
