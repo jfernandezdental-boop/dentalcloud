@@ -1,5 +1,5 @@
 'use client';
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useMemo, useState } from 'react';
 import { useForm } from 'react-hook-form';
 import Modal from '@/components/ui/Modal';
 import Icon from '@/components/ui/AppIcon';
@@ -42,11 +42,14 @@ interface NewAppointmentModalProps {
 export default function NewAppointmentModal({ open, onClose, defaults, onCreate }: NewAppointmentModalProps) {
   const [reminder, setReminder] = useState(true);
   const [saving, setSaving] = useState(false);
+  const [pq, setPq] = useState('');
+  const [showList, setShowList] = useState(false);
   const {
     register,
     handleSubmit,
     reset,
     watch,
+    setValue,
     formState: { errors },
   } = useForm<FormValues>({
     mode: 'onTouched',
@@ -54,12 +57,27 @@ export default function NewAppointmentModal({ open, onClose, defaults, onCreate 
   });
   const selectedDate = watch('date');
   const duration = watch('duration');
+  const patientId = watch('patientId');
+
+  const filteredPatients = useMemo(() => {
+    const q = pq.trim().toLowerCase();
+    if (!q) return patients;
+    return patients.filter(
+      (p) =>
+        p.name.toLowerCase().includes(q) ||
+        String(p.cedula || '').includes(q)
+    );
+  }, [pq]);
+
+  const selectedPatient = patients.find((p) => p.id === patientId);
 
   useEffect(() => {
     if (open) {
       reset({ patientId: '', doctorId: 'doc-001', date: defaults.date, start: defaults.start, duration: 30, procedure: procedures[0], chair: 'Sillón 1', notes: '' });
       setReminder(true);
       setSaving(false);
+      setPq('');
+      setShowList(false);
     }
   }, [open, defaults, reset]);
 
@@ -112,19 +130,46 @@ export default function NewAppointmentModal({ open, onClose, defaults, onCreate 
       <form id="new-cita-form" onSubmit={handleSubmit(submit)} className="grid gap-4 sm:grid-cols-2" noValidate>
         <div className="sm:col-span-2"><RequiredLegend /></div>
 
-        <div className="sm:col-span-2">
-          <label htmlFor="patientId" className="mb-1.5 block text-sm font-semibold">Paciente<RequiredMark /></label>
-          <select
-            id="patientId"
+        <div className="sm:col-span-2 relative">
+          <label htmlFor="patientSearch" className="mb-1.5 block text-sm font-semibold">Paciente<RequiredMark /></label>
+          <input
+            id="patientSearch"
+            type="text"
             className={inputClass(!!errors.patientId)}
-            {...ariaFor('patientId', !!errors.patientId)}
-            {...register('patientId', { required: 'Selecciona un paciente de la lista' })}
-          >
-            <option value="">Buscar paciente por nombre o cédula…</option>
-            {patients.map((p) => (
-              <option key={p.id} value={p.id}>{p.name} — C.I. {p.cedula}</option>
-            ))}
-          </select>
+            placeholder="Escribe nombre o cédula para buscar…"
+            value={selectedPatient ? `${selectedPatient.name} — C.I. ${selectedPatient.cedula}` : pq}
+            onChange={(e) => {
+              setPq(e.target.value);
+              setValue('patientId', '');
+              setShowList(true);
+            }}
+            onFocus={() => setShowList(true)}
+            autoComplete="off"
+          />
+          <input type="hidden" {...register('patientId', { required: 'Selecciona un paciente de la lista' })} />
+          {showList && (
+            <ul className="absolute z-20 mt-1 max-h-48 w-full overflow-y-auto rounded-lg border border-input bg-card shadow-lg">
+              {filteredPatients.length === 0 ? (
+                <li className="px-3 py-2 text-sm text-muted-foreground">Ningún paciente coincide</li>
+              ) : (
+                filteredPatients.map((p) => (
+                  <li key={p.id}>
+                    <button
+                      type="button"
+                      className="w-full px-3 py-2 text-left text-sm hover:bg-muted"
+                      onClick={() => {
+                        setValue('patientId', p.id, { shouldValidate: true });
+                        setPq('');
+                        setShowList(false);
+                      }}
+                    >
+                      {p.name} — C.I. {p.cedula}
+                    </button>
+                  </li>
+                ))
+              )}
+            </ul>
+          )}
           <FieldError id="patientId" message={errors.patientId?.message} />
         </div>
 
