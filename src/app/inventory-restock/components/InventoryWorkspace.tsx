@@ -1,8 +1,9 @@
 'use client';
-import React, { useCallback, useState } from 'react';
+import React, { useCallback, useEffect, useState } from 'react';
 import Icon from '@/components/ui/AppIcon';
 import MetricCard from '@/components/ui/MetricCard';
 import Toast from '@/components/ui/Toast';
+import { useAuth } from '@/components/AuthProvider';
 import { todayISO } from '@/lib/validators';
 import StockTable from './StockTable';
 import MovementsList from './MovementsList';
@@ -18,8 +19,17 @@ const tabs: { id: TabId; label: string; icon: string }[] = [
 
 export default function InventoryWorkspace() {
   const [tab, setTab] = useState<TabId>('stock');
-  const [items, setItems] = useState<InventoryItem[]>(initialItems);
-  const [movements, setMovements] = useState<Movement[]>(initialMovements);
+  const { user } = useAuth();
+  const isDemo = !!user?.clinicIsDemo;
+  // Una clínica real nace vacía; los ejemplos de inventoryData.ts son solo para la clínica demo.
+  const [items, setItems] = useState<InventoryItem[]>([]);
+  const [movements, setMovements] = useState<Movement[]>([]);
+  useEffect(() => {
+    if (isDemo) {
+      setItems(initialItems);
+      setMovements(initialMovements);
+    }
+  }, [isDemo]);
   const [modal, setModal] = useState<{ open: boolean; mode: 'restock' | 'new'; item: InventoryItem | null }>({ open: false, mode: 'restock', item: null });
   const [toast, setToast] = useState<string | null>(null);
 

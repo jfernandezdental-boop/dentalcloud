@@ -6,7 +6,7 @@ import Icon from '@/components/ui/AppIcon';
 import Toggle from '@/components/ui/Toggle';
 import { FieldError, RequiredMark, RequiredLegend, inputClass, ariaFor } from '@/components/ui/FormField';
 import { todayISO } from '@/lib/validators';
-import { doctors, patients, procedures } from '@/lib/mockData';
+import { doctors as mockDoctors, patients as mockPatients, procedures as mockProcedures } from '@/lib/mockData';
 
 export interface NewCitaPayload {
   patientId: string;
@@ -35,11 +35,15 @@ interface FormValues {
 interface NewAppointmentModalProps {
   open: boolean;
   onClose: () => void;
-  defaults: { date: string; start: string };
-  onCreate: (p: NewCitaPayload) => void;
+  defaults: { date: string; start: string; patientId?: string };
+  onCreate: (p: NewCitaPayload) => void | Promise<void>;
+  /** Datos reales de la clínica; si no se pasan, usa los de ejemplo (clínica demo). */
+  doctors?: { id: string; name: string; specialty?: string | null }[];
+  patients?: { id: string; name: string; cedula?: string | null }[];
+  procedures?: string[];
 }
 
-export default function NewAppointmentModal({ open, onClose, defaults, onCreate }: NewAppointmentModalProps) {
+export default function NewAppointmentModal({ open, onClose, defaults, onCreate, doctors = mockDoctors, patients = mockPatients, procedures = mockProcedures }: NewAppointmentModalProps) {
   const [reminder, setReminder] = useState(true);
   const [saving, setSaving] = useState(false);
   const [pq, setPq] = useState('');
@@ -53,7 +57,7 @@ export default function NewAppointmentModal({ open, onClose, defaults, onCreate 
     formState: { errors },
   } = useForm<FormValues>({
     mode: 'onTouched',
-    defaultValues: { patientId: '', doctorId: 'doc-001', date: defaults.date, start: defaults.start, duration: 30, procedure: procedures[0], chair: 'Sillón 1', notes: '' },
+    defaultValues: { patientId: defaults.patientId || '', doctorId: doctors[0]?.id || '', date: defaults.date, start: defaults.start, duration: 30, procedure: procedures[0] || '', chair: 'Sillón 1', notes: '' },
   });
   const selectedDate = watch('date');
   const duration = watch('duration');
@@ -67,25 +71,25 @@ export default function NewAppointmentModal({ open, onClose, defaults, onCreate 
         p.name.toLowerCase().includes(q) ||
         String(p.cedula || '').includes(q)
     );
-  }, [pq]);
+  }, [pq, patients]);
 
   const selectedPatient = patients.find((p) => p.id === patientId);
 
   useEffect(() => {
     if (open) {
-      reset({ patientId: '', doctorId: 'doc-001', date: defaults.date, start: defaults.start, duration: 30, procedure: procedures[0], chair: 'Sillón 1', notes: '' });
+      reset({ patientId: defaults.patientId || '', doctorId: doctors[0]?.id || '', date: defaults.date, start: defaults.start, duration: 30, procedure: procedures[0] || '', chair: 'Sillón 1', notes: '' });
       setReminder(true);
       setSaving(false);
       setPq('');
       setShowList(false);
     }
-  }, [open, defaults, reset]);
+  }, [open, defaults, reset]); // eslint-disable-line react-hooks/exhaustive-deps
 
   const submit = (v: FormValues) => {
     setSaving(true);
     const patient = patients.find((p) => p.id === v.patientId);
     setTimeout(() => {
-      onCreate({
+      Promise.resolve(onCreate({
         patientId: v.patientId,
         patientName: patient ? patient.name : 'Paciente',
         doctorId: v.doctorId,
@@ -96,7 +100,7 @@ export default function NewAppointmentModal({ open, onClose, defaults, onCreate 
         chair: v.chair,
         reminder,
         notes: v.notes.trim(),
-      });
+      })).finally(() => setSaving(false));
     }, 600);
   };
 
@@ -137,7 +141,7 @@ export default function NewAppointmentModal({ open, onClose, defaults, onCreate 
             type="text"
             className={inputClass(!!errors.patientId)}
             placeholder="Escribe nombre o cédula para buscar…"
-            value={selectedPatient ? `${selectedPatient.name} — C.I. ${selectedPatient.cedula}` : pq}
+            value={selectedPatient ? `${selectedPatient.name}${selectedPatient.cedula ? ` — C.I. ${selectedPatient.cedula}` : ''}` : pq}
             onChange={(e) => {
               setPq(e.target.value);
               setValue('patientId', '');
@@ -163,7 +167,7 @@ export default function NewAppointmentModal({ open, onClose, defaults, onCreate 
                         setShowList(false);
                       }}
                     >
-                      {p.name} — C.I. {p.cedula}
+                      {p.name}{p.cedula ? ` — C.I. ${p.cedula}` : ''}
                     </button>
                   </li>
                 ))
@@ -177,7 +181,7 @@ export default function NewAppointmentModal({ open, onClose, defaults, onCreate 
           <label htmlFor="doctorId" className="mb-1.5 block text-sm font-semibold">Odontólogo<RequiredMark /></label>
           <select id="doctorId" className={inputClass(!!errors.doctorId)} {...ariaFor('doctorId', !!errors.doctorId)} {...register('doctorId', { required: 'Selecciona un odontólogo' })}>
             {doctors.map((d) => (
-              <option key={d.id} value={d.id}>{d.name} · {d.specialty}</option>
+              <option key={d.id} value={d.id}>{d.name}{d.specialty ? ` · ${d.specialty}` : ''}</option>
             ))}
           </select>
           <FieldError id="doctorId" message={errors.doctorId?.message} />

@@ -1,7 +1,7 @@
 'use client';
 import React from 'react';
 import Icon from '@/components/ui/AppIcon';
-import { doctors } from '@/lib/mockData';
+import { doctors as mockDoctors } from '@/lib/mockData';
 import type { ViewMode } from './AgendaWorkspace';
 
 interface AgendaToolbarProps {
@@ -13,6 +13,8 @@ interface AgendaToolbarProps {
   onToday: () => void;
   doctorId: string;
   onDoctor: (id: string) => void;
+  /** Doctores reales de la clínica; si no se pasa, usa los de ejemplo (clínica demo). */
+  doctors?: { id: string; name: string }[];
 }
 
 const monthNames = ['enero', 'febrero', 'marzo', 'abril', 'mayo', 'junio', 'julio', 'agosto', 'septiembre', 'octubre', 'noviembre', 'diciembre'];
@@ -38,7 +40,7 @@ const views: { id: string; key: ViewMode; label: string }[] = [
   { id: 'vw-month', key: 'month', label: 'Mes' },
 ];
 
-export default function AgendaToolbar({ view, onView, cursor, onPrev, onNext, onToday, doctorId, onDoctor }: AgendaToolbarProps) {
+export default function AgendaToolbar({ view, onView, cursor, onPrev, onNext, onToday, doctorId, onDoctor, doctors = mockDoctors }: AgendaToolbarProps) {
   return (
     <div className="flex flex-wrap items-center gap-3 border-b border-border px-4 py-3">
       <div className="flex items-center gap-1">

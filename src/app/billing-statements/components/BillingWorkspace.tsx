@@ -5,7 +5,8 @@ import MetricCard from '@/components/ui/MetricCard';
 import InvoicesTable from './InvoicesTable';
 import ReceiptsList from './ReceiptsList';
 import FinancialStatement from './FinancialStatement';
-import { invoices, receipts, money } from './billingData';
+import { money } from './billingData';
+import { useBillingData } from './useBillingData';
 
 type TabId = 'invoices' | 'receipts' | 'statements';
 
@@ -17,6 +18,7 @@ const tabs: { id: TabId; label: string; icon: string }[] = [
 
 export default function BillingWorkspace() {
   const [tab, setTab] = useState<TabId>('invoices');
+  const { invoices, receipts } = useBillingData();
 
   const totalInvoiced = invoices.reduce((s, i) => s + i.total, 0);
   const totalCollected = receipts.reduce((s, r) => s + r.amount, 0);

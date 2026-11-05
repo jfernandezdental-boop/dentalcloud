@@ -1,8 +1,10 @@
 import React from 'react';
 import Icon from '@/components/ui/AppIcon';
-import { receipts, money, formatDate } from './billingData';
+import { money, formatDate } from './billingData';
+import { useBillingData } from './useBillingData';
 
 export default function ReceiptsList() {
+  const { receipts } = useBillingData();
   return (
     <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-3">
       {receipts?.map((r, idx) => (

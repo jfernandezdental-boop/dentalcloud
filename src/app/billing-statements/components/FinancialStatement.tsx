@@ -1,7 +1,9 @@
 import React from 'react';
-import { proformas, invoices, receipts, money } from './billingData';
+import { money } from './billingData';
+import { useBillingData } from './useBillingData';
 
 export default function FinancialStatement() {
+  const { proformas, invoices, receipts } = useBillingData();
   const totalInvoiced = invoices?.reduce((s, i) => s + i?.total, 0);
   const totalCollected = receipts?.reduce((s, r) => s + r?.amount, 0);
   const overdue = invoices?.filter((i) => i?.status === 'Vencida')?.reduce((s, i) => s + (i?.total - i?.paid), 0);

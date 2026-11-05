@@ -3,11 +3,13 @@ import React, { useMemo, useState } from 'react';
 import Badge from '@/components/ui/Badge';
 import Icon from '@/components/ui/AppIcon';
 import EmptyState from '@/components/ui/EmptyState';
-import { invoices, statusTone, money, formatDate, InvoiceStatus } from './billingData';
+import { statusTone, money, formatDate, InvoiceStatus } from './billingData';
+import { useBillingData } from './useBillingData';
 
 const filters: ('Todas' | InvoiceStatus)[] = ['Todas', 'Pagada', 'Parcial', 'Pendiente', 'Vencida'];
 
 export default function InvoicesTable() {
+  const { invoices } = useBillingData();
   const [filter, setFilter] = useState<'Todas' | InvoiceStatus>('Todas');
   const [query, setQuery] = useState('');
 
