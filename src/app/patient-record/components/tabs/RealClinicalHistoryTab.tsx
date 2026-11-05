@@ -222,7 +222,6 @@ export default function RealClinicalHistoryTab({ patientId }: { patientId: strin
       pa: v.pa || '', fc: v.fc || '', fr: v.fr || '', temp: v.temp || '', peso: v.peso || '',
       extraoral: x.extraoral || '', intraoral: x.intraoral || '', higiene: o.higiene || '', salud_obs: o.observaciones || '',
     });
-    // Parse existing diagnosis into chips when possible
     const parts = (h.diagnosis || '').split('·').map((s) => s.trim()).filter(Boolean);
     const parsed = parts.map((p) => {
       const m = p.match(/^(K\d{2}\.?\d?|S\d{2}\.?\d?|Z\d{2}\.?\d?)\s+(.+)$/i);
@@ -246,18 +245,12 @@ export default function RealClinicalHistoryTab({ patientId }: { patientId: strin
       antecedents: clean({ personales: f.personales, familiares: f.familiares, medicamentos: f.medicamentos }),
       vitals: clean({ pa: f.pa, fc: f.fc, fr: f.fr, temp: f.temp, peso: f.peso }),
       exam: clean({ extraoral: f.extraoral, intraoral: f.intraoral }),
-      oral ind_health: clean({ higiene: f.higiene, observaciones: f.salud_obs }),
-    };
-    // fix typo
-    const payloadFixed = {
-      ...payload,
       oral_health: clean({ higiene: f.higiene, observaciones: f.salud_obs }),
     };
-    delete (payloadFixed as Record<string, unknown>).oral;
     const sb = getSupabase();
     const { error: e } = editing?.id
-      ? await sb.from('clinical_histories').update(payloadFixed).eq('id', editing.id)
-      : await sb.from('clinical_histories').insert({ ...payloadFixed, clinic_id: user.clinicId, patient_id: patientId });
+      ? await sb.from('clinical_histories').update(payload).eq('id', editing.id)
+      : await sb.from('clinical_histories').insert({ ...payload, clinic_id: user.clinicId, patient_id: patientId });
     setSaving(false);
     if (e) return setToast(`No se pudo guardar: ${e.message}`);
     setEditing(null);
