@@ -7,26 +7,12 @@ import Toast from '@/components/ui/Toast';
 import { getSupabase } from '@/lib/supabase/client';
 import { useAuth } from '@/components/AuthProvider';
 import { btnGhost, btnPrimary, today } from './formKit';
+import { printHtml } from '@/lib/print';
 
 type Rx = { id: string; date: string | null; drug: string; dose: string | null; duration: string | null; indications: string | null };
 
-type Med = {
-  id: string;
-  name: string;
-  dose: string;
-  duration: string;
-  indications: string;
-  category: string;
-};
-
-type RxItem = {
-  id: string;
-  drug: string;
-  dose: string;
-  duration: string;
-  quantity: string;
-  indications: string;
-};
+type Med = { id: string; name: string; dose: string; duration: string; indications: string; category: string };
+type RxItem = { id: string; drug: string; dose: string; duration: string; quantity: string; indications: string };
 
 const CATALOG: Med[] = [
   { id: 'm1', name: 'Ibuprofeno 400 mg tabletas', dose: '1 tableta cada 8 horas', duration: '3 días', indications: 'Tomar con alimentos. Suspender si presenta molestias gástricas.', category: 'Analgésico / AINE' },
@@ -92,14 +78,7 @@ export default function RealPrescriptionsTab({ patientId }: { patientId: string 
   const addMed = (m: Med) => {
     setItems((prev) => [
       ...prev,
-      {
-        id: `it-${Date.now()}-${Math.random().toString(36).slice(2, 6)}`,
-        drug: m.name,
-        dose: m.dose,
-        duration: m.duration,
-        quantity: '',
-        indications: m.indications,
-      },
+      { id: `it-${Date.now()}-${Math.random().toString(36).slice(2, 6)}`, drug: m.name, dose: m.dose, duration: m.duration, quantity: '', indications: m.indications },
     ]);
   };
 
@@ -141,21 +120,33 @@ export default function RealPrescriptionsTab({ patientId }: { patientId: string 
     load();
   }
 
+  const printRx = (r: Rx) => {
+    printHtml(
+      `Receta médica — ${r.drug}`,
+      `
+      <div style="font-family: Georgia, serif; max-width: 640px; margin: 0 auto;">
+        <h1 style="font-size: 20px; margin-bottom: 4px;">Receta médica odontológica</h1>
+        <p style="color: #666; font-size: 13px; margin-bottom: 20px;">${r.date || ''} · ${user?.fullName || 'Profesional tratante'}${user?.clinicName ? ` · ${user.clinicName}` : ''}</p>
+        <div style="border: 1px solid #ddd; border-radius: 8px; padding: 16px; margin-bottom: 16px;">
+          <h2 style="font-size: 16px; margin: 0 0 8px;">${r.drug}</h2>
+          <p style="margin: 4px 0;"><strong>Dosis:</strong> ${r.dose || '—'}</p>
+          <p style="margin: 4px 0;"><strong>Duración:</strong> ${r.duration || '—'}</p>
+          <p style="margin: 4px 0;"><strong>Indicaciones:</strong> ${r.indications || '—'}</p>
+        </div>
+        <p style="font-size: 12px; color: #888;">Documento generado por el sistema. Usar «Imprimir» o «Guardar como PDF» del navegador.</p>
+      </div>
+    `,
+    );
+  };
+
   return (
     <div>
       <div className="mb-4 flex items-center justify-between gap-3">
         <div>
           <h3 className="text-base font-semibold">Recetario</h3>
-          <p className="text-xs text-muted-foreground">Medicamentos recetados a este paciente.</p>
+          <p className="text-xs text-muted-foreground">Prescripciones emitidas a este paciente.</p>
         </div>
-        <button
-          type="button"
-          className={btnPrimary()}
-          onClick={() => {
-            setItems([]);
-            setOpen(true);
-          }}
-        >
+        <button type="button" className={btnPrimary()} onClick={() => { setItems([]); setOpen(true); }}>
           <Icon name="PlusIcon" size={16} /> Nueva receta
         </button>
       </div>
@@ -165,17 +156,31 @@ export default function RealPrescriptionsTab({ patientId }: { patientId: string 
       {rows && rows.length === 0 && (
         <EmptyState icon={<Icon name="BeakerIcon" size={24} />} title="Sin recetas" description="Pulsa «Nueva receta» para registrar la primera." />
       )}
-      <ul className="space-y-3">
+
+      <ul className="grid gap-3 sm:grid-cols-2">
         {rows?.map((r) => (
-          <li key={r.id} className="rounded-xl border border-border p-4">
-            <div className="flex flex-wrap items-center justify-between gap-2">
-              <span className="text-sm font-semibold">{r.drug}</span>
-              <span className="text-xs text-muted-foreground">{r.date}</span>
+          <li key={r.id} className="rounded-xl border border-border bg-card p-4 shadow-sm transition-shadow hover:shadow-md">
+            <div className="flex items-start justify-between gap-2">
+              <div className="min-w-0 flex-1">
+                <p className="text-xs font-medium text-muted-foreground">{r.date}</p>
+                <h4 className="mt-0.5 text-sm font-bold leading-snug">{r.drug}</h4>
+                <p className="mt-1 text-sm text-muted-foreground">
+                  {[r.dose, r.duration].filter(Boolean).join(' · ') || 'Sin dosis registrada'}
+                </p>
+                {r.indications && (
+                  <p className="mt-2 rounded-lg bg-muted/50 px-3 py-2 text-xs text-muted-foreground">{r.indications}</p>
+                )}
+              </div>
+              <button
+                type="button"
+                onClick={() => printRx(r)}
+                className="shrink-0 rounded-lg border border-input p-2 text-muted-foreground transition-colors hover:bg-muted hover:text-foreground"
+                aria-label="Imprimir receta"
+                title="Imprimir"
+              >
+                <Icon name="PrinterIcon" size={16} />
+              </button>
             </div>
-            <p className="mt-1 text-sm text-muted-foreground">
-              {[r.dose && `Dosis: ${r.dose}`, r.duration && `Duración: ${r.duration}`].filter(Boolean).join(' · ') || 'Sin dosis registrada'}
-            </p>
-            {r.indications && <p className="mt-1 text-sm">{r.indications}</p>}
           </li>
         ))}
       </ul>
@@ -184,8 +189,8 @@ export default function RealPrescriptionsTab({ patientId }: { patientId: string 
         open={open}
         onClose={() => !saving && setOpen(false)}
         size="xl"
-        title="Recetario"
-        subtitle="Selecciona medicamentos del catálogo. La dosis se completa y puedes editarla."
+        title="Nueva receta"
+        subtitle="Catálogo profesional. Selecciona, edita dosis e imprime al emitir."
         footer={
           <>
             <button type="button" className={btnGhost} onClick={() => setOpen(false)} disabled={saving}>Cancelar</button>
@@ -225,12 +230,7 @@ export default function RealPrescriptionsTab({ patientId }: { patientId: string 
                     <p className="text-sm font-semibold">{m.name}</p>
                     <p className="text-xs text-muted-foreground">{m.dose} · {m.duration}</p>
                   </div>
-                  <button
-                    type="button"
-                    onClick={() => addMed(m)}
-                    className="shrink-0 rounded-full border border-primary p-1 text-primary hover:bg-primary/10"
-                    aria-label={`Agregar ${m.name}`}
-                  >
+                  <button type="button" onClick={() => addMed(m)} className="shrink-0 rounded-full border border-primary p-1 text-primary hover:bg-primary/10" aria-label={`Agregar ${m.name}`}>
                     <Icon name="PlusIcon" size={16} />
                   </button>
                 </li>
@@ -244,12 +244,7 @@ export default function RealPrescriptionsTab({ patientId }: { patientId: string 
               <button
                 type="button"
                 className="text-xs font-semibold text-primary hover:underline"
-                onClick={() =>
-                  setItems((prev) => [
-                    ...prev,
-                    { id: `it-${Date.now()}`, drug: '', dose: '', duration: '', quantity: '', indications: '' },
-                  ])
-                }
+                onClick={() => setItems((prev) => [...prev, { id: `it-${Date.now()}`, drug: '', dose: '', duration: '', quantity: '', indications: '' }])}
               >
                 + Medicamento manual
               </button>
@@ -257,7 +252,7 @@ export default function RealPrescriptionsTab({ patientId }: { patientId: string 
 
             {items.length === 0 ? (
               <div className="mb-4 rounded-lg border border-dashed border-border p-6 text-center text-sm text-muted-foreground">
-                Selecciona medicamentos de la lista para armar la receta. La dosis se completa automáticamente y puedes editarla.
+                Selecciona medicamentos de la lista. La dosis se completa y puedes editarla.
               </div>
             ) : (
               <ul className="mb-4 max-h-[280px] space-y-3 overflow-y-auto">
@@ -265,12 +260,7 @@ export default function RealPrescriptionsTab({ patientId }: { patientId: string 
                   <li key={it.id} className="rounded-lg border border-border bg-card p-3">
                     <div className="mb-2 flex items-center gap-2">
                       <span className="flex h-6 w-6 items-center justify-center rounded-full bg-primary text-xs font-bold text-primary-foreground">{idx + 1}</span>
-                      <input
-                        value={it.drug}
-                        onChange={(e) => updateItem(it.id, 'drug', e.target.value)}
-                        className="min-w-0 flex-1 rounded border border-input bg-background px-2 py-1 text-sm font-semibold outline-none focus:border-primary"
-                        placeholder="Medicamento"
-                      />
+                      <input value={it.drug} onChange={(e) => updateItem(it.id, 'drug', e.target.value)} className="min-w-0 flex-1 rounded border border-input bg-background px-2 py-1 text-sm font-semibold outline-none focus:border-primary" placeholder="Medicamento" />
                       <button type="button" onClick={() => removeItem(it.id)} className="text-muted-foreground hover:text-destructive" aria-label="Quitar">
                         <Icon name="TrashIcon" size={16} />
                       </button>
@@ -280,26 +270,14 @@ export default function RealPrescriptionsTab({ patientId }: { patientId: string 
                       <input value={it.duration} onChange={(e) => updateItem(it.id, 'duration', e.target.value)} className="rounded border border-input bg-background px-2 py-1 text-xs outline-none focus:border-primary" placeholder="Duración" />
                       <input value={it.quantity} onChange={(e) => updateItem(it.id, 'quantity', e.target.value)} className="rounded border border-input bg-background px-2 py-1 text-xs outline-none focus:border-primary" placeholder="Cantidad total" />
                     </div>
-                    <textarea
-                      value={it.indications}
-                      onChange={(e) => updateItem(it.id, 'indications', e.target.value)}
-                      rows={2}
-                      className="w-full rounded border border-input bg-background px-2 py-1 text-xs outline-none focus:border-primary"
-                      placeholder="Indicaciones"
-                    />
+                    <textarea value={it.indications} onChange={(e) => updateItem(it.id, 'indications', e.target.value)} rows={2} className="w-full rounded border border-input bg-background px-2 py-1 text-xs outline-none focus:border-primary" placeholder="Indicaciones" />
                   </li>
                 ))}
               </ul>
             )}
 
             <p className="mb-1.5 text-sm font-semibold">Recomendaciones generales</p>
-            <textarea
-              value={recs}
-              onChange={(e) => setRecs(e.target.value)}
-              rows={2}
-              className="w-full rounded-lg border border-input bg-background px-3 py-2 text-sm outline-none focus:border-primary"
-              placeholder="Dieta blanda, evitar masticar del lado tratado..."
-            />
+            <textarea value={recs} onChange={(e) => setRecs(e.target.value)} rows={2} className="w-full rounded-lg border border-input bg-background px-3 py-2 text-sm outline-none focus:border-primary" placeholder="Dieta blanda, evitar masticar del lado tratado..." />
           </div>
         </div>
       </Modal>
