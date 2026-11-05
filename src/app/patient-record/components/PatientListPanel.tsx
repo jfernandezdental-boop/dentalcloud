@@ -30,14 +30,27 @@ interface Props {
   query: string;
   onQuery: (q: string) => void;
   onSelect: (id: string) => void;
+  onNew?: () => void;
   loading?: boolean;
 }
 
-export default function PatientListPanel({ patients, selectedId, query, onQuery, onSelect, loading }: Props) {
+export default function PatientListPanel({ patients, selectedId, query, onQuery, onSelect, onNew, loading }: Props) {
   return (
     <aside className="flex h-full min-h-[420px] flex-col rounded-2xl border border-border bg-card">
       <div className="border-b border-border p-3">
-        <p className="mb-2 text-sm font-semibold">Pacientes de la clinica</p>
+        <div className="mb-2 flex items-center justify-between gap-2">
+          <p className="text-sm font-semibold">Pacientes de la clinica</p>
+          {onNew && (
+            <button
+              type="button"
+              onClick={onNew}
+              className="inline-flex items-center gap-1 rounded-lg border border-primary bg-primary/10 px-2.5 py-1 text-xs font-semibold text-primary hover:bg-primary/20"
+            >
+              <Icon name="UserPlusIcon" size={14} />
+              Nuevo
+            </button>
+          )}
+        </div>
         <div className="relative">
           <Icon name="MagnifyingGlassIcon" size={16} className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground" />
           <input
@@ -53,7 +66,16 @@ export default function PatientListPanel({ patients, selectedId, query, onQuery,
         {loading ? (
           <li className="p-4 text-sm text-muted-foreground">Cargando pacientes...</li>
         ) : patients.length === 0 ? (
-          <li className="p-4 text-sm text-muted-foreground">No hay pacientes. Usa "Nuevo paciente".</li>
+          <li className="p-4 text-sm text-muted-foreground">
+            No hay pacientes.{' '}
+            {onNew ? (
+              <button type="button" onClick={onNew} className="font-semibold text-primary underline">
+                Registrar uno nuevo
+              </button>
+            ) : (
+              'Usa "Nuevo paciente".'
+            )}
+          </li>
         ) : (
           patients.map((p) => {
             const active = p.id === selectedId;
