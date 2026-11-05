@@ -1,11 +1,14 @@
 import React from 'react';
 import AppLayout from '@/components/AppLayout';
-import AgendaSwitch from './components/AgendaSwitch';
+import ClinicDataGate from '@/components/ClinicDataGate';
+import AgendaWorkspace from './components/AgendaWorkspace';
 
 export default function DoctorAgendaPage() {
   return (
     <AppLayout>
-      <AgendaSwitch />
+      <ClinicDataGate module="Agenda del doctor">
+        <AgendaWorkspace />
+      </ClinicDataGate>
     </AppLayout>
   );
 }
