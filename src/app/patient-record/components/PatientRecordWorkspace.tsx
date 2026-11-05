@@ -104,7 +104,6 @@ export default function PatientRecordWorkspace() {
       setToast('No hay una clinica activa en tu sesion. Cierra sesion y vuelve a entrar.');
       return;
     }
-    // Columnas reales de la tabla patients (clinic_id es obligatorio; RLS exige que sea tu clinica).
     const payload: Record<string, unknown> = {
       clinic_id: user.clinicId,
       first_name: p.firstName.trim(),
@@ -178,6 +177,7 @@ export default function PatientRecordWorkspace() {
         query={query}
         onQuery={setQuery}
         onSelect={setSelectedId}
+        onNew={() => setOpenNew(true)}
         loading={loading}
       />
 
@@ -229,14 +229,6 @@ export default function PatientRecordWorkspace() {
               )}
             </div>
             <div className="flex flex-wrap gap-2">
-              <button
-                type="button"
-                onClick={() => setOpenNew(true)}
-                className="inline-flex items-center gap-2 rounded-lg border border-primary bg-primary/10 px-4 py-2.5 text-sm font-semibold text-primary"
-              >
-                <Icon name="UserPlusIcon" size={16} />
-                Nuevo paciente
-              </button>
               <Link
                 href="/interactive-odontogram"
                 className="inline-flex items-center gap-2 rounded-lg bg-primary px-4 py-2.5 text-sm font-semibold text-primary-foreground"
