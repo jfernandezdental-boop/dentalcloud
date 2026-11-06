@@ -13,6 +13,7 @@ import RealPaymentsTab from './tabs/RealPaymentsTab';
 import RealClinicalHistoryTab from './tabs/RealClinicalHistoryTab';
 import RealPrescriptionsTab from './tabs/RealPrescriptionsTab';
 import RealHistoryTab from './tabs/RealHistoryTab';
+import RealLabExamsTab from './tabs/RealLabExamsTab';
 import EmptyState from '@/components/ui/EmptyState';
 import { useAuth } from '@/components/AuthProvider';
 import type { PatientListItem } from './PatientListPanel';
@@ -21,6 +22,7 @@ const tabs = [
   { id: 'pt-profile', key: 'profile', label: 'Datos del paciente', icon: 'IdentificationIcon' },
   { id: 'pt-hc', key: 'hc', label: 'Historia clinica MSP', icon: 'ClipboardDocumentListIcon' },
   { id: 'pt-hist', key: 'hist', label: 'Historial', icon: 'ClockIcon' },
+  { id: 'pt-lab', key: 'lab', label: 'Laboratorio', icon: 'BeakerIcon' },
   { id: 'pt-bud', key: 'bud', label: 'Presupuestos', icon: 'DocumentTextIcon' },
   { id: 'pt-rx', key: 'rx', label: 'Recetario', icon: 'BeakerIcon' },
   { id: 'pt-img', key: 'img', label: 'Radiografias', icon: 'PhotoIcon' },
@@ -70,6 +72,7 @@ export default function PatientTabs({
         {active === 'profile' && <ProfileTab patient={patient} onSaved={onProfileSaved} />}
         {active === 'hc' && (demo ? <ClinicalHistoryTab /> : <RealClinicalHistoryTab patientId={patient.id} />)}
         {active === 'hist' && (demo ? <TreatmentHistoryTab /> : <RealHistoryTab patientId={patient.id} />)}
+        {active === 'lab' && <RealLabExamsTab patientId={patient.id} />}
         {active === 'bud' && (demo ? <BudgetsTab /> : <RealBudgetsTab patientId={patient.id} />)}
         {active === 'rx' && (demo ? <PrescriptionsTab /> : <RealPrescriptionsTab patientId={patient.id} />)}
         {active === 'img' && (demo ? <XraysTab /> : pending('Radiografías'))}
