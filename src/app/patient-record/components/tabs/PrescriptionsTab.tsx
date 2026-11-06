@@ -4,7 +4,7 @@ import Icon from '@/components/ui/AppIcon';
 import Toast from '@/components/ui/Toast';
 import EmptyState from '@/components/ui/EmptyState';
 import Modal from '@/components/ui/Modal';
-import { printHtml } from '@/lib/print';
+import { printPrescription, DEMO_DOC_CLINIC, DEMO_DOC_PATIENT } from '@/lib/clinicDocs';
 
 interface RxItem {
   id: string;
@@ -21,6 +21,7 @@ interface Rx {
   items: RxItem[];
   recommendations: string;
   doctor: string;
+  diagnosis?: string;
 }
 
 type Med = {
@@ -116,6 +117,7 @@ export default function PrescriptionsTab() {
         items: [...items],
         recommendations: recs.trim(),
         doctor: 'Profesional tratante',
+        diagnosis: dx.trim(),
       },
       ...prev,
     ]);
@@ -129,16 +131,19 @@ export default function PrescriptionsTab() {
   };
 
   const printRx = (r: Rx) => {
-    const body = r.items
-      .map(
-        (it, i) =>
-          `<div class="box"><h2>${i + 1}. ${it.drug}</h2><p><strong>Dosis:</strong> ${it.dose}</p><p><strong>Duración:</strong> ${it.duration}</p>${it.quantity ? `<p><strong>Cantidad:</strong> ${it.quantity}</p>` : ''}<p><strong>Indicaciones:</strong> ${it.indications || '—'}</p></div>`,
-      )
-      .join('');
-    printHtml(
-      `Receta ${r.date}`,
-      `<h1>Receta médica odontológica</h1><p class="muted">${r.date} · ${r.doctor}</p>${body}${r.recommendations ? `<p><strong>Recomendaciones:</strong> ${r.recommendations}</p>` : ''}<p class="muted">Usa "Guardar como PDF" o Imprimir.</p>`,
-    );
+    const m = (r.diagnosis || '').match(/^([A-Z]\d{2}(?:\.\d+)?)\s+(.*)$/);
+    const digits = r.id.replace(/\D/g, '').slice(-4).padStart(4, '0');
+    printPrescription({
+      code: `RX-${new Date().getFullYear()}-${digits}`,
+      date: r.date,
+      clinic: DEMO_DOC_CLINIC,
+      patient: DEMO_DOC_PATIENT,
+      diagnosis: r.diagnosis ? (m ? { code: m[1], text: m[2] } : { text: r.diagnosis }) : null,
+      items: r.items.map((it) => ({ name: it.drug, dose: it.dose, duration: it.duration, quantity: it.quantity, note: it.indications })),
+      recommendations: r.recommendations || null,
+      doctorName: r.doctor,
+      doctorRegistry: '1020-2015-1409',
+    });
   };
 
   return (

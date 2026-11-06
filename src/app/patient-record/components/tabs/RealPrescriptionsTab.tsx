@@ -7,9 +7,10 @@ import Toast from '@/components/ui/Toast';
 import { getSupabase } from '@/lib/supabase/client';
 import { useAuth } from '@/components/AuthProvider';
 import { btnGhost, btnPrimary, today } from './formKit';
-import { printHtml } from '@/lib/print';
+import { printPrescription } from '@/lib/clinicDocs';
+import { useDocContext } from '@/lib/useDocContext';
 
-type Rx = { id: string; date: string | null; drug: string; dose: string | null; duration: string | null; indications: string | null };
+type Rx = { id: string; date: string | null; created_at: string | null; drug: string; dose: string | null; duration: string | null; indications: string | null };
 
 type Med = { id: string; name: string; dose: string; duration: string; indications: string; category: string };
 type RxItem = { id: string; drug: string; dose: string; duration: string; quantity: string; indications: string };
@@ -38,6 +39,7 @@ const CATEGORIES = ['Todos', 'Analgésico / AINE', 'Antiinflamatorio', 'Antibió
 
 export default function RealPrescriptionsTab({ patientId }: { patientId: string }) {
   const { user } = useAuth();
+  const doc = useDocContext(patientId);
   const [rows, setRows] = useState<Rx[] | null>(null);
   const [error, setError] = useState('');
   const [open, setOpen] = useState(false);
@@ -51,7 +53,7 @@ export default function RealPrescriptionsTab({ patientId }: { patientId: string 
   const load = useCallback(async () => {
     const { data, error: e } = await getSupabase()
       .from('prescriptions')
-      .select('id, date, drug, dose, duration, indications')
+      .select('id, date, created_at, drug, dose, duration, indications')
       .eq('patient_id', patientId)
       .order('date', { ascending: false })
       .order('created_at', { ascending: false });
@@ -120,23 +122,32 @@ export default function RealPrescriptionsTab({ patientId }: { patientId: string 
     load();
   }
 
+  // Una receta = todos los medicamentos emitidos juntos (misma fecha, con minutos de diferencia como máximo).
   const printRx = (r: Rx) => {
-    printHtml(
-      `Receta médica — ${r.drug}`,
-      `
-      <div style="font-family: Georgia, serif; max-width: 640px; margin: 0 auto;">
-        <h1 style="font-size: 20px; margin-bottom: 4px;">Receta médica odontológica</h1>
-        <p style="color: #666; font-size: 13px; margin-bottom: 20px;">${r.date || ''} · ${user?.fullName || 'Profesional tratante'}${user?.clinicName ? ` · ${user.clinicName}` : ''}</p>
-        <div style="border: 1px solid #ddd; border-radius: 8px; padding: 16px; margin-bottom: 16px;">
-          <h2 style="font-size: 16px; margin: 0 0 8px;">${r.drug}</h2>
-          <p style="margin: 4px 0;"><strong>Dosis:</strong> ${r.dose || '—'}</p>
-          <p style="margin: 4px 0;"><strong>Duración:</strong> ${r.duration || '—'}</p>
-          <p style="margin: 4px 0;"><strong>Indicaciones:</strong> ${r.indications || '—'}</p>
-        </div>
-        <p style="font-size: 12px; color: #888;">Documento generado por el sistema. Usar «Imprimir» o «Guardar como PDF» del navegador.</p>
-      </div>
-    `,
-    );
+    if (!doc) return setToast('Preparando los datos del documento… intenta de nuevo en un segundo.');
+    const t0 = new Date(r.created_at || 0).getTime();
+    const group = (rows || [])
+      .filter((x) => x.date === r.date && Math.abs(new Date(x.created_at || 0).getTime() - t0) <= 120_000)
+      .sort((a, b) => String(a.created_at || '').localeCompare(String(b.created_at || '')));
+    const list = group.length ? group : [r];
+    const parts = list.map((x) => String(x.indications || '').split(' | '));
+    // Las recomendaciones generales se guardan al final de cada medicamento: si son iguales en todos, se imprimen una sola vez.
+    const last = parts[0]?.[parts[0].length - 1] || '';
+    const common = parts.every((p) => p.length >= 2 && p[p.length - 1] === last) ? last : '';
+    printPrescription({
+      code: `RX-${String(r.date || '').slice(0, 4) || new Date().getFullYear()}-${(list[0]?.id || r.id).slice(-4).toUpperCase()}`,
+      date: r.date || today(),
+      clinic: doc.clinic,
+      patient: doc.patient,
+      items: list.map((x, i) => ({
+        name: x.drug,
+        dose: x.dose,
+        duration: x.duration,
+        note: common ? (parts[i] || []).slice(0, -1).join(' | ') : x.indications,
+      })),
+      recommendations: common || null,
+      doctorName: user?.role === 'doctor' ? user.fullName : null,
+    });
   };
 
   return (
@@ -176,7 +187,7 @@ export default function RealPrescriptionsTab({ patientId }: { patientId: string 
                 onClick={() => printRx(r)}
                 className="shrink-0 rounded-lg border border-input p-2 text-muted-foreground transition-colors hover:bg-muted hover:text-foreground"
                 aria-label="Imprimir receta"
-                title="Imprimir"
+                title="Imprimir receta completa / PDF"
               >
                 <Icon name="PrinterIcon" size={16} />
               </button>

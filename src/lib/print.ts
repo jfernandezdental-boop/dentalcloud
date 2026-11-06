@@ -1,17 +1,4 @@
-/**
- * Genera HTML completo y abre impresion / Guardar como PDF.
- * Usa Blob URL para evitar PDF vacio (fallo frecuente de document.write + onload).
- */
-export function printHtml(title: string, bodyHtml: string) {
-  const safeTitle = String(title || 'Documento').replace(/[<>]/g, '');
-  const html = `<!DOCTYPE html>
-<html lang="es">
-<head>
-<meta charset="utf-8"/>
-<meta name="viewport" content="width=device-width, initial-scale=1"/>
-<title>${safeTitle}</title>
-<style>
-  @page { size: letter; margin: 18mm 16mm; }
+const DEFAULT_CSS = `  @page { size: letter; margin: 18mm 16mm; }
   * { box-sizing: border-box; }
   body {
     font-family: "Segoe UI", system-ui, -apple-system, sans-serif;
@@ -101,7 +88,22 @@ export function printHtml(title: string, bodyHtml: string) {
   }
   @media print {
     body { -webkit-print-color-adjust: exact; print-color-adjust: exact; }
-  }
+  }`;
+
+/**
+ * Genera HTML completo y abre impresion / Guardar como PDF.
+ * Usa Blob URL para evitar PDF vacio (fallo frecuente de document.write + onload).
+ */
+export function printHtml(title: string, bodyHtml: string, css?: string) {
+  const safeTitle = String(title || 'Documento').replace(/[<>]/g, '');
+  const html = `<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="utf-8"/>
+<meta name="viewport" content="width=device-width, initial-scale=1"/>
+<title>${safeTitle}</title>
+<style>
+${css ?? DEFAULT_CSS}
 </style>
 </head>
 <body>

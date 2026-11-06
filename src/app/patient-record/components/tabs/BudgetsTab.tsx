@@ -4,10 +4,8 @@ import Badge from '@/components/ui/Badge';
 import Icon from '@/components/ui/AppIcon';
 import Toast from '@/components/ui/Toast';
 import Modal from '@/components/ui/Modal';
-import { printHtml } from '@/lib/print';
-import { buildProformaOficioHtml } from '@/lib/proformaDocument';
+import { printBudget, DEMO_DOC_CLINIC, DEMO_DOC_PATIENT } from '@/lib/clinicDocs';
 import { linkApprovedProformaToFinance } from '@/lib/financeLink';
-import { useAuth } from '@/components/AuthProvider';
 
 type BudgetStatus = 'Borrador' | 'Enviada' | 'Aprobada' | 'Parcialmente pagada' | 'Pagada';
 
@@ -82,8 +80,6 @@ function nextCode(list: Budget[]) {
 }
 
 export default function BudgetsTab() {
-  const { user } = useAuth();
-  const clinicName = user?.clinicName || 'Clinica dental';
   const [budgets, setBudgets] = useState<Budget[]>(initial);
   const [toast, setToast] = useState('');
   const [openNew, setOpenNew] = useState(false);
@@ -94,21 +90,16 @@ export default function BudgetsTab() {
   const [lines, setLines] = useState<Line[]>([]);
 
   const openPdf = (b: Budget) => {
-    const html = buildProformaOficioHtml({
+    printBudget({
       code: b.code,
       date: b.date,
-      status: b.status,
-      clinicName,
-      clinicCity: '',
-      patientName: PATIENT.name,
-      patientId: PATIENT.id,
-      patientPhone: PATIENT.phone,
-      doctorName: PATIENT.doctor,
-      lines: b.lines,
+      clinic: DEMO_DOC_CLINIC,
+      patient: DEMO_DOC_PATIENT,
+      lines: b.lines.map((l) => ({ piece: l.piece, procedure: l.procedure, qty: l.qty, unit: l.unit })),
       paid: b.paid,
-      notes: 'Al aprobar este presupuesto se genera el cargo correspondiente en finanzas.',
+      doctorName: PATIENT.doctor,
+      doctorRegistry: '1020-2015-1409',
     });
-    printHtml(`Proforma ${b.code}`, html);
   };
 
   const advance = (id: string) => {

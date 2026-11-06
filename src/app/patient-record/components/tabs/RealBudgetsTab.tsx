@@ -8,6 +8,8 @@ import Toast from '@/components/ui/Toast';
 import { getSupabase } from '@/lib/supabase/client';
 import { useAuth } from '@/components/AuthProvider';
 import { Field, fld, btnGhost, btnPrimary, money, today } from './formKit';
+import { printBudget } from '@/lib/clinicDocs';
+import { useDocContext } from '@/lib/useDocContext';
 
 type Line = { piece: string; procedure: string; qty: number; unit_price: number };
 type Budget = { id: string; code: string; date: string | null; status: string | null; paid: number | null; budget_lines: { piece: string | null; procedure: string; qty: number | null; unit_price: number | null }[] };
@@ -18,6 +20,7 @@ const totalOf = (ls: { qty: number | null; unit_price: number | null }[]) => ls.
 /** Presupuestos / proformas del paciente: budgets + budget_lines (RLS por clinica). Nuevo / Editar / Guardar. */
 export default function RealBudgetsTab({ patientId }: { patientId: string }) {
   const { user } = useAuth();
+  const doc = useDocContext(patientId);
   const [rows, setRows] = useState<Budget[] | null>(null);
   const [error, setError] = useState('');
   const [catalog, setCatalog] = useState<{ name: string; price: number | null }[]>([]);
@@ -55,6 +58,19 @@ export default function RealBudgetsTab({ patientId }: { patientId: string }) {
   }, [load]);
 
   const total = useMemo(() => totalOf(lines), [lines]);
+
+  const printPdf = (b: Budget) => {
+    if (!doc) return setToast('Preparando los datos del documento… intenta de nuevo en un segundo.');
+    printBudget({
+      code: b.code,
+      date: b.date || today(),
+      clinic: doc.clinic,
+      patient: doc.patient,
+      lines: b.budget_lines.map((l) => ({ piece: l.piece, procedure: l.procedure, qty: Number(l.qty) || 1, unit: Number(l.unit_price) || 0 })),
+      paid: Number(b.paid || 0),
+      doctorName: user?.role === 'doctor' ? user.fullName : null,
+    });
+  };
 
   function openNew() {
     setEditing({ id: null, code: `PRF-${new Date().getFullYear()}-${String(Date.now()).slice(-6)}` });
@@ -158,7 +174,10 @@ export default function RealBudgetsTab({ patientId }: { patientId: string }) {
                 <span className="font-mono text-sm font-semibold">{b.code}</span>
                 <span className="text-xs text-muted-foreground">{b.date || ''}</span>
                 {b.status && <Badge>{b.status}</Badge>}
-                <button type="button" className={`${btnGhost} ml-auto`} onClick={() => openEdit(b)}>
+                <button type="button" className={`${btnGhost} ml-auto`} onClick={() => printPdf(b)} title="Imprimir o guardar como PDF">
+                  <Icon name="PrinterIcon" size={14} /> PDF
+                </button>
+                <button type="button" className={btnGhost} onClick={() => openEdit(b)}>
                   <Icon name="PencilSquareIcon" size={14} /> Editar
                 </button>
               </header>
