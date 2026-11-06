@@ -19,6 +19,7 @@ const baseItems: NavItem[] = [
   { id: 'nav-dashboard', label: 'Dashboard', href: '/', icon: 'Squares2X2Icon' },
   { id: 'nav-agenda', label: 'Agenda del doctor', href: '/doctor-agenda', icon: 'CalendarDaysIcon' },
   { id: 'nav-patient', label: 'Ficha del paciente', href: '/patient-record', icon: 'UserCircleIcon' },
+  { id: 'nav-proformas', label: 'Proformas', href: '/proformas', icon: 'DocumentTextIcon' },
   { id: 'nav-odontogram', label: 'Odontograma', href: '/interactive-odontogram', icon: 'PuzzlePieceIcon' },
   { id: 'nav-billing', label: 'Facturacion', href: '/billing-statements', icon: 'ReceiptPercentIcon' },
   { id: 'nav-inventory', label: 'Inventario', href: '/inventory-restock', icon: 'CubeIcon' },
