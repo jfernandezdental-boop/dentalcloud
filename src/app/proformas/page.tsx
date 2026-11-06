@@ -9,6 +9,7 @@ import Toast from '@/components/ui/Toast';
 import { getSupabase } from '@/lib/supabase/client';
 import { useAuth } from '@/components/AuthProvider';
 import { Field, fld, btnGhost, btnPrimary, money, today } from '@/app/patient-record/components/tabs/formKit';
+import { linkApprovedProformaToFinance } from '@/lib/financeLink';
 
 type Line = { piece: string; procedure: string; qty: number; unit_price: number; discount: number };
 type Budget = {
@@ -57,7 +58,6 @@ export default function ProformasPage() {
   const load = useCallback(async () => {
     if (!user?.clinicId) return;
     const sb = getSupabase();
-    // Solo proformas sin paciente o con guest (independientes)
     let { data, error: e } = await sb
       .from('budgets')
       .select('id, code, date, status, paid, patient_id, guest_name, guest_phone, budget_lines(piece, procedure, qty, unit_price, discount)')
@@ -142,7 +142,6 @@ export default function ProformasPage() {
       clinic_id: user.clinicId,
       code: editing.code,
     };
-    // guest_* opcionales (si la columna no existe, se reintenta sin ellas)
     header.guest_name = guestName.trim() || null;
     header.guest_phone = guestPhone.trim() || null;
 
@@ -226,14 +225,32 @@ export default function ProformasPage() {
       setSaving(false);
       return setToast(`No se pudo registrar el paciente: ${pe?.message || 'error'}`);
     }
+    const patientId = (patient as { id: string }).id;
+    const guestNameSnap = acceptFor.guest_name;
+    const guestPhoneSnap = acceptFor.guest_phone;
     const { error: be } = await sb
       .from('budgets')
-      .update({ patient_id: (patient as { id: string }).id, status: 'Aprobada', guest_name: null, guest_phone: null })
+      .update({ patient_id: patientId, status: 'Aprobada', guest_name: null, guest_phone: null })
       .eq('id', acceptFor.id);
     setSaving(false);
     if (be) return setToast(`Paciente creado, pero no se vinculó el presupuesto: ${be.message}`);
+
+    // Factura / cargo: copia patient_id, guest_name y guest_phone del presupuesto
+    const tot = totalOf(acceptFor.budget_lines);
+    const concept = acceptFor.budget_lines.map((l) => l.procedure).join('; ').slice(0, 180);
+    linkApprovedProformaToFinance({
+      proformaCode: acceptFor.code,
+      patientName: `${reg.first_name.trim()} ${reg.last_name.trim()}`.trim(),
+      patientId,
+      guestName: guestNameSnap,
+      guestPhone: guestPhoneSnap,
+      concept: concept || `Proforma ${acceptFor.code}`,
+      total: tot,
+      paid: Number(acceptFor.paid || 0),
+    });
+
     setAcceptFor(null);
-    setToast(`Presupuesto ${acceptFor.code} aceptado y paciente registrado.`);
+    setToast(`Presupuesto ${acceptFor.code} aceptado, paciente registrado y cargo en finanzas.`);
     load();
   }
 
@@ -363,6 +380,7 @@ export default function ProformasPage() {
               <input className={fld} value={guestPhone} onChange={(e) => setGuestPhone(e.target.value)} />
             </Field>
           </div>
+
           <p className="mb-2 mt-4 text-sm font-semibold">Procedimientos</p>
           <div className="space-y-2">
             {lines.map((l, i) => (
