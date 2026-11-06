@@ -8,12 +8,14 @@ import Badge from '@/components/ui/Badge';
 import { getSupabase } from '@/lib/supabase/client';
 import { useAuth } from '@/components/AuthProvider';
 import { Field, fld, btnGhost, btnPrimary, today } from './formKit';
+import { printHtml } from '@/lib/print';
+import { useDocContext } from '@/lib/useDocContext';
+import { fmtDocDate } from '@/lib/clinicDocs';
 
 type FieldDef = { key: string; label: string; ref?: string; options?: string[] };
 type Section = { title: string; fields: FieldDef[] };
 type Panel = { id: string; name: string; sections: Section[] };
 
-/** Paneles clínicos estándar (prequirúrgico / laboratorio clínico). */
 const PANELS: Panel[] = [
   {
     id: 'uroanalisis',
@@ -147,8 +149,37 @@ type LabExam = {
   lab_name: string | null;
 };
 
+const esc = (s: unknown) =>
+  String(s ?? '').replace(/&/g, '&').replace(/</g, '<').replace(/>/g, '>').replace(/"/g, '"');
+
+const LAB_CSS = `
+  @page { size: A4; margin: 12mm 14mm; }
+  * { box-sizing: border-box; }
+  body { margin: 0; font-family: "Helvetica Neue", Arial, sans-serif; color: #1f2937; font-size: 11px; line-height: 1.4; -webkit-print-color-adjust: exact; print-color-adjust: exact; }
+  .sheet { max-width: 186mm; margin: 0 auto; }
+  .dh { display: flex; justify-content: space-between; align-items: flex-start; gap: 20px; padding-bottom: 10px; border-bottom: 3px solid #0f766e; margin-bottom: 12px; }
+  .clinic { font-size: 16px; font-weight: 700; color: #0f766e; }
+  .cl-sub { font-size: 9.5px; color: #4b5563; margin-top: 2px; }
+  .dt { font-size: 17px; font-weight: 800; color: #111827; text-align: right; }
+  .date { font-size: 10px; color: #6b7280; text-align: right; margin-top: 2px; }
+  .pbox { display: grid; grid-template-columns: 1.5fr 1fr 1fr; gap: 8px 16px; border: 1px solid #d1d5db; border-radius: 8px; padding: 8px 12px; margin-bottom: 12px; }
+  .pbox span { display: block; font-size: 8px; text-transform: uppercase; letter-spacing: .06em; color: #6b7280; }
+  .pbox b { font-size: 11px; }
+  .sec { font-size: 10px; font-weight: 800; color: #0f766e; text-transform: uppercase; letter-spacing: .07em; margin: 12px 0 6px; padding-bottom: 3px; border-bottom: 1px solid #c7d2cf; }
+  table { width: 100%; border-collapse: collapse; }
+  th { font-size: 8px; text-transform: uppercase; letter-spacing: .06em; color: #6b7280; text-align: left; padding: 5px 4px; border-bottom: 1px solid #d1d5db; }
+  td { padding: 5px 4px; border-bottom: 1px solid #e5e7eb; font-size: 10.5px; }
+  td.res { font-weight: 700; }
+  td.ref { color: #6b7280; font-size: 9.5px; }
+  .notes { margin-top: 12px; font-size: 10px; color: #374151; border: 1px solid #e5e7eb; border-radius: 6px; padding: 8px 10px; }
+  .sign { margin-top: 36px; display: grid; grid-template-columns: 1fr 1fr; gap: 28px; }
+  .sg { border-top: 1px solid #111; padding-top: 6px; text-align: center; font-size: 10px; color: #374151; }
+  .foot { margin-top: 20px; padding-top: 8px; border-top: 1px solid #e5e7eb; text-align: center; font-size: 9px; color: #6b7280; }
+`;
+
 export default function RealLabExamsTab({ patientId }: { patientId: string }) {
   const { user } = useAuth();
+  const doc = useDocContext(patientId);
   const [rows, setRows] = useState<LabExam[] | null>(null);
   const [error, setError] = useState('');
   const [open, setOpen] = useState(false);
@@ -172,7 +203,7 @@ export default function RealLabExamsTab({ patientId }: { patientId: string }) {
       .order('date', { ascending: false })
       .order('created_at', { ascending: false });
     if (e) {
-      setError(e.message.includes('lab_exams') ? 'Crea la tabla lab_exams en Supabase (ver SQL al final).' : 'No se pudieron cargar los exámenes.');
+      setError(e.message.includes('lab_exams') ? 'Crea la tabla lab_exams en Supabase.' : 'No se pudieron cargar los exámenes.');
       setRows([]);
     } else {
       setError('');
@@ -211,7 +242,64 @@ export default function RealLabExamsTab({ patientId }: { patientId: string }) {
     setValues((s) => ({ ...s, [key]: v }));
   }
 
-  async function save() {
+  const panelName = (id: string) => PANELS.find((p) => p.id === id)?.name || id;
+
+  function printExam(ex: {
+    panel: string;
+    date: string | null;
+    status?: string | null;
+    results: Record<string, string> | null;
+    notes?: string | null;
+    lab_name?: string | null;
+  }) {
+    const p = PANELS.find((x) => x.id === ex.panel) || PANELS[0];
+    const clinic = doc?.clinic;
+    const patient = doc?.patient;
+    const sectionsHtml = p.sections
+      .map((sec) => {
+        const rowsHtml = sec.fields
+          .map(
+            (fd) =>
+              `<tr><td>${esc(fd.label)}</td><td class="res">${esc((ex.results || {})[fd.key] || '—')}</td><td class="ref">${esc(fd.ref || '')}</td></tr>`,
+          )
+          .join('');
+        return `<div class="sec">${esc(sec.title)}</div><table><thead><tr><th>Prueba</th><th>Resultado</th><th>Valores de ref.</th></tr></thead><tbody>${rowsHtml}</tbody></table>`;
+      })
+      .join('');
+
+    const contact = [clinic?.phone, clinic?.mobile, clinic?.email].filter(Boolean).join(' · ');
+    const body = `
+      <div class="dh">
+        <div>
+          <div class="clinic">${esc(clinic?.name || user?.clinicName || 'Clínica')}</div>
+          <div class="cl-sub">${esc([clinic?.address, clinic?.city].filter(Boolean).join(', '))}</div>
+          ${contact ? `<div class="cl-sub">${esc(contact)}</div>` : ''}
+          ${clinic?.ruc ? `<div class="cl-sub">RUC ${esc(clinic.ruc)}</div>` : ''}
+        </div>
+        <div>
+          <div class="dt">${esc(p.name.toUpperCase())}</div>
+          <div class="date">Fecha: ${esc(fmtDocDate(ex.date || today()))}</div>
+          ${ex.lab_name ? `<div class="date">Lab: ${esc(ex.lab_name)}</div>` : ''}
+          ${ex.status ? `<div class="date">Estado: ${esc(ex.status)}</div>` : ''}
+        </div>
+      </div>
+      <div class="pbox">
+        <div><span>Paciente</span><b>${esc(patient?.name || 'Paciente')}</b></div>
+        <div><span>Cédula</span><b>${esc(patient?.cedula || '—')}</b></div>
+        <div><span>Fecha de emisión</span><b>${esc(fmtDocDate(ex.date || today()))}</b></div>
+      </div>
+      ${sectionsHtml}
+      ${ex.notes ? `<div class="notes"><b>Observaciones:</b> ${esc(ex.notes)}</div>` : ''}
+      <div class="sign">
+        <div class="sg">Profesional / Laboratorio</div>
+        <div class="sg">Sello</div>
+      </div>
+      <div class="foot">Documento generado por DentalCloud · ${esc(clinic?.name || '')}</div>
+    `;
+    printHtml(`${p.name} — ${patient?.name || 'Paciente'}`, body, LAB_CSS);
+  }
+
+  async function save(andPdf = false) {
     if (!user?.clinicId) return setToast('Sin clínica activa.');
     setSaving(true);
     const payload = {
@@ -231,11 +319,19 @@ export default function RealLabExamsTab({ patientId }: { patientId: string }) {
     setSaving(false);
     if (e) return setToast(`No se pudo guardar: ${e.message}`);
     setOpen(false);
-    setToast('Examen de laboratorio guardado.');
+    setToast(andPdf ? 'Examen guardado. Generando PDF…' : 'Examen de laboratorio guardado.');
+    if (andPdf) {
+      printExam({
+        panel: panelId,
+        date: date || today(),
+        status,
+        results: values,
+        notes: notes.trim() || null,
+        lab_name: labName.trim() || null,
+      });
+    }
     load();
   }
-
-  const panelName = (id: string) => PANELS.find((p) => p.id === id)?.name || id;
 
   return (
     <div>
@@ -243,7 +339,7 @@ export default function RealLabExamsTab({ patientId }: { patientId: string }) {
         <div>
           <h3 className="text-base font-semibold">Exámenes de laboratorio</h3>
           <p className="text-xs text-muted-foreground">
-            Uroanálisis, hemograma, coagulación y química con campos estándar y valores de referencia.
+            Uroanálisis, hemograma y más. Guarda e imprime el resultado en PDF.
           </p>
         </div>
         <button type="button" className={btnPrimary()} onClick={openNew}>
@@ -269,9 +365,19 @@ export default function RealLabExamsTab({ patientId }: { patientId: string }) {
               <span className="text-xs text-muted-foreground">{ex.date}</span>
               {ex.status && <Badge>{ex.status}</Badge>}
               {ex.lab_name && <span className="text-xs text-muted-foreground">{ex.lab_name}</span>}
-              <button type="button" className={`${btnGhost} ml-auto`} onClick={() => openEdit(ex)}>
-                <Icon name="PencilSquareIcon" size={14} /> Editar
-              </button>
+              <div className="ml-auto flex gap-1">
+                <button
+                  type="button"
+                  className={btnGhost}
+                  title="PDF / imprimir"
+                  onClick={() => printExam(ex)}
+                >
+                  <Icon name="PrinterIcon" size={14} /> PDF
+                </button>
+                <button type="button" className={btnGhost} onClick={() => openEdit(ex)}>
+                  <Icon name="PencilSquareIcon" size={14} /> Editar
+                </button>
+              </div>
             </header>
             <div className="overflow-x-auto p-4">
               <table className="w-full text-sm">
@@ -305,12 +411,16 @@ export default function RealLabExamsTab({ patientId }: { patientId: string }) {
         onClose={() => !saving && setOpen(false)}
         size="xl"
         title={editingId ? 'Editar examen' : 'Nuevo examen de laboratorio'}
-        subtitle="Completa los resultados según el estándar del panel"
+        subtitle="Completa los resultados y genera el PDF profesional"
         footer={
           <>
             <button type="button" className={btnGhost} onClick={() => setOpen(false)} disabled={saving}>Cancelar</button>
-            <button type="button" className={btnPrimary(saving)} onClick={save} disabled={saving}>
-              {saving ? 'Guardando…' : 'Guardar resultados'}
+            <button type="button" className={btnGhost} onClick={() => save(false)} disabled={saving}>
+              {saving ? 'Guardando…' : 'Solo guardar'}
+            </button>
+            <button type="button" className={btnPrimary(saving)} onClick={() => save(true)} disabled={saving}>
+              <Icon name="PrinterIcon" size={14} />
+              {saving ? 'Guardando…' : 'Guardar y PDF'}
             </button>
           </>
         }
@@ -368,7 +478,7 @@ export default function RealLabExamsTab({ patientId }: { patientId: string }) {
               ))}
             </div>
           </div>
-        ))}
+n        ))}
 
         <Field label="Observaciones / interpretación">
           <textarea rows={2} className={fld} value={notes} onChange={(e) => setNotes(e.target.value)} />
