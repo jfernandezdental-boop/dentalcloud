@@ -366,12 +366,7 @@ export default function RealLabExamsTab({ patientId }: { patientId: string }) {
               {ex.status && <Badge>{ex.status}</Badge>}
               {ex.lab_name && <span className="text-xs text-muted-foreground">{ex.lab_name}</span>}
               <div className="ml-auto flex gap-1">
-                <button
-                  type="button"
-                  className={btnGhost}
-                  title="PDF / imprimir"
-                  onClick={() => printExam(ex)}
-                >
+                <button type="button" className={btnGhost} title="PDF / imprimir" onClick={() => printExam(ex)}>
                   <Icon name="PrinterIcon" size={14} /> PDF
                 </button>
                 <button type="button" className={btnGhost} onClick={() => openEdit(ex)}>
@@ -478,7 +473,7 @@ export default function RealLabExamsTab({ patientId }: { patientId: string }) {
               ))}
             </div>
           </div>
-n        ))}
+        ))}
 
         <Field label="Observaciones / interpretación">
           <textarea rows={2} className={fld} value={notes} onChange={(e) => setNotes(e.target.value)} />
