@@ -49,6 +49,7 @@ export default function RealPrescriptionsTab({ patientId }: { patientId: string 
   const [recs, setRecs] = useState('Dieta blanda, evitar masticar del lado tratado...');
   const [saving, setSaving] = useState(false);
   const [toast, setToast] = useState('');
+  const [catalog, setCatalog] = useState<Med[]>(CATALOG);
 
   const load = useCallback(async () => {
     const { data, error: e } = await getSupabase()
@@ -64,18 +65,45 @@ export default function RealPrescriptionsTab({ patientId }: { patientId: string 
     }
   }, [patientId]);
 
+  const loadCatalog = useCallback(async () => {
+    const sb = getSupabase();
+    let { data, error } = await sb
+      .from('medications')
+      .select('id, name, dose, duration, indications, category, active')
+      .eq('active', true)
+      .order('name');
+    if (error) {
+      const r = await sb.from('medications').select('id, name, dose, duration, indications, category').order('name');
+      data = r.data;
+      error = r.error;
+    }
+    if (!error && data && data.length > 0) {
+      setCatalog(
+        (data as { id: string; name: string; dose: string | null; duration: string | null; indications: string | null; category: string | null }[]).map((m) => ({
+          id: m.id,
+          name: m.name,
+          dose: m.dose || '',
+          duration: m.duration || '',
+          indications: m.indications || '',
+          category: m.category || 'Anestésico / Otros',
+        })),
+      );
+    }
+  }, []);
+
   useEffect(() => {
     setRows(null);
     load();
-  }, [load]);
+    loadCatalog();
+  }, [load, loadCatalog]);
 
   const filtered = useMemo(() => {
-    let meds = CATALOG;
+    let meds = catalog;
     if (cat !== 'Todos') meds = meds.filter((m) => m.category === cat);
     const qq = q.trim().toLowerCase();
     if (qq) meds = meds.filter((m) => m.name.toLowerCase().includes(qq));
     return meds;
-  }, [cat, q]);
+  }, [cat, q, catalog]);
 
   const addMed = (m: Med) => {
     setItems((prev) => [
@@ -122,7 +150,6 @@ export default function RealPrescriptionsTab({ patientId }: { patientId: string 
     load();
   }
 
-  // Una receta = todos los medicamentos emitidos juntos (misma fecha, con minutos de diferencia como máximo).
   const printRx = (r: Rx) => {
     if (!doc) return setToast('Preparando los datos del documento… intenta de nuevo en un segundo.');
     const t0 = new Date(r.created_at || 0).getTime();
@@ -131,7 +158,6 @@ export default function RealPrescriptionsTab({ patientId }: { patientId: string 
       .sort((a, b) => String(a.created_at || '').localeCompare(String(b.created_at || '')));
     const list = group.length ? group : [r];
     const parts = list.map((x) => String(x.indications || '').split(' | '));
-    // Las recomendaciones generales se guardan al final de cada medicamento: si son iguales en todos, se imprimen una sola vez.
     const last = parts[0]?.[parts[0].length - 1] || '';
     const common = parts.every((p) => p.length >= 2 && p[p.length - 1] === last) ? last : '';
     printPrescription({
@@ -155,7 +181,7 @@ export default function RealPrescriptionsTab({ patientId }: { patientId: string 
       <div className="mb-4 flex items-center justify-between gap-3">
         <div>
           <h3 className="text-base font-semibold">Recetario</h3>
-          <p className="text-xs text-muted-foreground">Prescripciones emitidas a este paciente.</p>
+          <p className="text-xs text-muted-foreground">Prescripciones emitidas a este paciente. Catálogo editable en Configuración.</p>
         </div>
         <button type="button" className={btnPrimary()} onClick={() => { setItems([]); setOpen(true); }}>
           <Icon name="PlusIcon" size={16} /> Nueva receta
@@ -201,7 +227,7 @@ export default function RealPrescriptionsTab({ patientId }: { patientId: string 
         onClose={() => !saving && setOpen(false)}
         size="xl"
         title="Nueva receta"
-        subtitle="Catálogo profesional. Selecciona, edita dosis e imprime al emitir."
+        subtitle="Elige del catálogo de la clínica. La dosis viene lista y es editable."
         footer={
           <>
             <button type="button" className={btnGhost} onClick={() => setOpen(false)} disabled={saving}>Cancelar</button>
@@ -213,7 +239,7 @@ export default function RealPrescriptionsTab({ patientId }: { patientId: string 
       >
         <div className="grid gap-6 lg:grid-cols-2">
           <div>
-            <p className="mb-2 text-sm font-semibold">Medicamentos más comunes</p>
+            <p className="mb-2 text-sm font-semibold">Medicamentos del catálogo</p>
             <input
               value={q}
               onChange={(e) => setQ(e.target.value)}
