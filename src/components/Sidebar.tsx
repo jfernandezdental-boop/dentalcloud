@@ -23,6 +23,7 @@ const baseItems: NavItem[] = [
   { id: 'nav-odontogram', label: 'Odontograma', href: '/interactive-odontogram', icon: 'PuzzlePieceIcon' },
   { id: 'nav-billing', label: 'Facturacion', href: '/billing-statements', icon: 'ReceiptPercentIcon' },
   { id: 'nav-inventory', label: 'Inventario', href: '/inventory-restock', icon: 'CubeIcon' },
+  { id: 'nav-settings', label: 'Configuracion', href: '/clinic-settings', icon: 'Cog6ToothIcon' },
   { id: 'nav-staff', label: 'Personal y roles', href: '/clinic-staff', icon: 'UserGroupIcon', adminOnly: true },
 ];
 
@@ -126,7 +127,7 @@ export default function Sidebar({ collapsed, onToggle, mobileOpen, onCloseMobile
             <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-accent text-xs font-bold text-accent-foreground">
               {initials(user?.fullName || '')}
             </span>
-            <div className={`min-w-0 flex-1 ${collapsed ? 'lg:hidden' : ''}`}>
+            <div className={`min-w-0 flex-1 ${collapsed ? 'lg:hidden' : ''`}>
               <p className="truncate text-sm font-semibold">{user?.fullName || ''}</p>
               <p className="truncate text-[11px] text-sidebar-foreground/70">{user?.roleLabel || ''}</p>
             </div>
