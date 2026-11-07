@@ -89,7 +89,6 @@ export default function OdontogramWorkspace() {
 
   const selectedPatient = patients.find((p) => p.id === patientId);
 
-  // Lista de pacientes de la clínica (RLS filtra por clinic_id en Supabase)
   useEffect(() => {
     let alive = true;
     (async () => {
@@ -100,12 +99,10 @@ export default function OdontogramWorkspace() {
         .select('id, first_name, last_name, full_name, cedula, document, chart_number, hc')
         .order('created_at', { ascending: false })
         .limit(300);
-      // Si existe clinic_id, filtramos; RLS también debe limitar
       q = q.eq('clinic_id', user.clinicId);
       const { data: rows, error } = await q;
       if (!alive) return;
       if (error) {
-        // fallback sin clinic_id en select filter si la columna no está en RLS path
         const r2 = await sb.from('patients').select('id, first_name, last_name, full_name, cedula').order('created_at', { ascending: false }).limit(300);
         if (!alive) return;
         setPatients(
@@ -129,13 +126,11 @@ export default function OdontogramWorkspace() {
     };
   }, [user?.clinicId]);
 
-  // ?patient=id desde ficha
   useEffect(() => {
     const qid = search?.get('patient');
     if (qid) setPatientId(qid);
   }, [search]);
 
-  // Cargar revisiones del paciente seleccionado
   const loadRevisions = useCallback(
     async (pid: string) => {
       if (!pid) {
@@ -155,7 +150,6 @@ export default function OdontogramWorkspace() {
       setFuture([]);
 
       if (demo) {
-        // Demo: maqueta, no toca la base
         setData(cloneData(initialData));
         setRevisions([]);
         setDirty(false);
@@ -172,7 +166,6 @@ export default function OdontogramWorkspace() {
         .limit(50);
 
       if (error) {
-        // Tabla ausente o RLS: odontograma limpio, se podrá intentar guardar
         setRevisions([]);
         setData(emptyData());
         setDirty(false);
@@ -207,7 +200,6 @@ export default function OdontogramWorkspace() {
       });
 
       setRevisions(list);
-      // Última revisión = trabajo actual; si no hay, limpio
       setData(list[0] ? cloneData(list[0].data) : emptyData());
       setDirty(false);
       setLoadingPatient(false);
@@ -373,7 +365,6 @@ export default function OdontogramWorkspace() {
     const sb = getSupabase();
     let ins = await sb.from('odontogram_revisions').insert(payload).select('id, created_at').maybeSingle();
 
-    // Fallback si columnas chart/recession/mobility no existen: solo data jsonb
     if (ins.error && /chart|recession|mobility|column/i.test(ins.error.message || '')) {
       const slim = {
         clinic_id: user.clinicId,
@@ -602,7 +593,7 @@ export default function OdontogramWorkspace() {
             >
               Cancelar
             </button>
-            <buttonutton
+            <button
               onClick={clearAll}
               className="rounded-lg bg-destructive px-4 py-2 text-sm font-semibold text-destructive-foreground transition-all hover:opacity-90 active:scale-95"
             >
