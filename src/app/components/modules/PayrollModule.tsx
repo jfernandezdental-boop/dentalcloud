@@ -1,125 +1,113 @@
 'use client';
-import React, { useMemo, useState } from 'react';
+import React, { useCallback, useEffect, useState } from 'react';
+import Link from 'next/link';
 import { useAuth } from '@/components/AuthProvider';
 import Badge from '@/components/ui/Badge';
 import Icon from '@/components/ui/AppIcon';
-import Modal from '@/components/ui/Modal';
-import Toast from '@/components/ui/Toast';
 import EmptyState from '@/components/ui/EmptyState';
+import { listClinicStaffFromDb, type StaffMember } from '@/lib/supabase/clinicStaff';
 
-type Row = {
-  id: string;
-  name: string;
-  role: string;
-  base: number;
-  extras: number;
-  iessEmp: number;
-  status: 'Activo' | 'Pendiente';
-};
-
-const DEMO_SEED: Row[] = [
-  { id: 'stf-001', name: 'Dra. Camila Andrade', role: 'Odontologo general', base: 1800, extras: 220, iessEmp: 9.45, status: 'Activo' },
-];
-
+/**
+ * Pestaña RR.HH. del dashboard: vista profesional del equipo real de la clínica.
+ * La gestión completa (crear, editar, activar, reset clave) está en /clinic-staff.
+ */
 export default function PayrollModule() {
   const { user } = useAuth();
-  const [staff, setStaff] = useState<Row[]>(() => (user?.clinicIsDemo ? DEMO_SEED : []));
-  const [open, setOpen] = useState(false);
-  const [toast, setToast] = useState('');
-  const [form, setForm] = useState({ name: '', role: 'Odontologo', base: 800, extras: 0, status: 'Pendiente' as Row['status'] });
+  const [staff, setStaff] = useState<StaffMember[] | null>(null);
 
-  const total = useMemo(
-    () => staff.reduce((a, s) => a + s.base + s.extras - (s.base + s.extras) * (s.iessEmp / 100), 0),
-    [staff],
-  );
+  const load = useCallback(async () => {
+    if (!user?.clinicId) {
+      setStaff([]);
+      return;
+    }
+    const rows = await listClinicStaffFromDb(user.clinicId);
+    setStaff(rows);
+  }, [user?.clinicId]);
 
-  const save = () => {
-    if (!form.name.trim()) return setToast('Nombre obligatorio');
-    setStaff((prev) => [
-      {
-        id: `stf-${Date.now()}`,
-        name: form.name.trim(),
-        role: form.role,
-        base: Number(form.base) || 0,
-        extras: Number(form.extras) || 0,
-        iessEmp: 9.45,
-        status: form.status,
-      },
-      ...prev,
-    ]);
-    setOpen(false);
-    setForm({ name: '', role: 'Odontologo', base: 800, extras: 0, status: 'Pendiente' });
-    setToast('Colaborador registrado');
-  };
+  useEffect(() => {
+    void load();
+  }, [load]);
+
+  const active = (staff || []).filter((s) => s.active).length;
+  const doctors = (staff || []).filter((s) => s.role === 'doctor' && s.active).length;
 
   return (
     <div className="space-y-4">
       <div className="flex flex-wrap items-center justify-between gap-2">
-        <p className="text-sm text-muted-foreground">Nómina del personal de la clínica</p>
-        <button type="button" onClick={() => setOpen(true)} className="inline-flex items-center gap-1.5 rounded-lg bg-primary px-3 py-2 text-xs font-semibold text-primary-foreground">
-          <Icon name="PlusIcon" size={14} /> Agregar
-        </button>
+        <div className="grid w-full gap-3 sm:grid-cols-3 sm:w-auto">
+          <div className="rounded-xl border border-border px-3 py-2">
+            <p className="text-[11px] text-muted-foreground">Personal activo</p>
+            <p className="text-lg font-bold tabular-nums">{staff ? active : '—'}</p>
+          </div>
+          <div className="rounded-xl border border-border px-3 py-2">
+            <p className="text-[11px] text-muted-foreground">Odontólogos</p>
+            <p className="text-lg font-bold tabular-nums">{staff ? doctors : '—'}</p>
+          </div>
+          <div className="rounded-xl border border-border px-3 py-2">
+            <p className="text-[11px] text-muted-foreground">Total registros</p>
+            <p className="text-lg font-bold tabular-nums">{staff ? staff.length : '—'}</p>
+          </div>
+        </div>
+        <Link
+          href="/clinic-staff"
+          className="inline-flex items-center gap-1.5 rounded-lg bg-primary px-3 py-2 text-xs font-semibold text-primary-foreground"
+        >
+          <Icon name="UserPlusIcon" size={14} /> Gestionar personal
+        </Link>
       </div>
 
-      {staff.length === 0 ? (
+      {staff === null ? (
+        <div className="h-28 animate-pulse rounded-xl bg-muted/40" />
+      ) : staff.length === 0 ? (
         <EmptyState
           icon={<Icon name="UserGroupIcon" size={24} />}
           title="Sin personal registrado"
-          description="Agrega al equipo de tu clínica. No se muestran datos de ejemplo."
+          description="Crea odontólogos, recepción y personal en Personal y roles. Los odontólogos aparecen en la agenda."
+          actionLabel="Ir a Personal y roles"
+          onAction={() => {
+            if (typeof window !== 'undefined') window.location.href = '/clinic-staff';
+          }}
         />
       ) : (
         <div className="overflow-x-auto rounded-xl border border-border">
           <table className="w-full min-w-[640px] text-left text-sm">
             <thead className="bg-muted/60 text-xs uppercase text-muted-foreground">
               <tr>
-                {['Nombre', 'Rol', 'Base', 'Extras', 'IESS %', 'Neto est.', 'Estado'].map((h) => (
-                  <th key={h} className="px-3 py-2.5 font-semibold">{h}</th>
+                {['Nombre', 'Correo', 'Rol', 'Estado', 'Alta'].map((h) => (
+                  <th key={h} className="px-3 py-2.5 font-semibold">
+                    {h}
+                  </th>
                 ))}
               </tr>
             </thead>
             <tbody className="divide-y divide-border">
-              {staff.map((s) => {
-                const neto = s.base + s.extras - (s.base + s.extras) * (s.iessEmp / 100);
-                return (
-                  <tr key={s.id} className="hover:bg-muted/40">
-                    <td className="px-3 py-2.5 font-medium">{s.name}</td>
-                    <td className="px-3 py-2.5">{s.role}</td>
-                    <td className="px-3 py-2.5 tabular-nums">{s.base.toFixed(2)}</td>
-                    <td className="px-3 py-2.5 tabular-nums">{s.extras.toFixed(2)}</td>
-                    <td className="px-3 py-2.5">{s.iessEmp}</td>
-                    <td className="px-3 py-2.5 tabular-nums font-semibold">{neto.toFixed(2)}</td>
-                    <td className="px-3 py-2.5">
-                      <Badge tone={s.status === 'Activo' ? 'success' : 'warning'}>{s.status}</Badge>
-                    </td>
-                  </tr>
-                );
-              })}
+              {staff.map((s) => (
+                <tr key={s.id} className="hover:bg-muted/40">
+                  <td className="px-3 py-2.5 font-medium">{s.fullName}</td>
+                  <td className="px-3 py-2.5 text-muted-foreground">{s.email}</td>
+                  <td className="px-3 py-2.5">
+                    <Badge tone={s.role === 'doctor' ? 'accent' : 'info'}>{s.roleLabel}</Badge>
+                  </td>
+                  <td className="px-3 py-2.5">
+                    <Badge tone={s.active ? 'success' : 'neutral'} dot>
+                      {s.active ? 'Activo' : 'Inactivo'}
+                    </Badge>
+                  </td>
+                  <td className="px-3 py-2.5 text-muted-foreground">{s.createdAt}</td>
+                </tr>
+              ))}
             </tbody>
           </table>
         </div>
       )}
 
-      <p className="text-right text-sm">Total neto estimado: <strong>{total.toFixed(2)}</strong></p>
-
-      <Modal open={open} onClose={() => setOpen(false)} title="Nuevo colaborador" footer={
-        <>
-          <button type="button" onClick={() => setOpen(false)} className="rounded-lg border px-4 py-2 text-sm font-semibold">Cancelar</button>
-          <button type="button" onClick={save} className="rounded-lg bg-primary px-4 py-2 text-sm font-semibold text-primary-foreground">Guardar</button>
-        </>
-      }>
-        <div className="grid gap-3 sm:grid-cols-2">
-          <label className="text-sm font-semibold sm:col-span-2">Nombre
-            <input className="mt-1 w-full rounded-lg border px-3 py-2" value={form.name} onChange={(e) => setForm({ ...form, name: e.target.value })} />
-          </label>
-          <label className="text-sm font-semibold">Rol
-            <input className="mt-1 w-full rounded-lg border px-3 py-2" value={form.role} onChange={(e) => setForm({ ...form, role: e.target.value })} />
-          </label>
-          <label className="text-sm font-semibold">Base
-            <input type="number" className="mt-1 w-full rounded-lg border px-3 py-2" value={form.base} onChange={(e) => setForm({ ...form, base: Number(e.target.value) })} />
-          </label>
-        </div>
-      </Modal>
-      {toast ? <Toast message={toast} onDone={() => setToast('')} /> : null}
+      <p className="text-xs text-muted-foreground">
+        Para editar, activar/desactivar o resetear claves usa{' '}
+        <Link href="/clinic-staff" className="font-semibold text-primary underline-offset-2 hover:underline">
+          Personal y roles
+        </Link>
+        .
+      </p>
     </div>
   );
 }
