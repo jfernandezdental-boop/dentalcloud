@@ -318,7 +318,6 @@ export default function ClinicStaffPage() {
         )}
       </div>
 
-      {/* Crear */}
       <Modal
         open={open}
         onClose={() => setOpen(false)}
@@ -395,7 +394,6 @@ export default function ClinicStaffPage() {
         </form>
       </Modal>
 
-      {/* Editar */}
       <Modal
         open={!!editMember}
         onClose={() => setEditMember(null)}
@@ -434,7 +432,7 @@ export default function ClinicStaffPage() {
             <label className="mb-1 block text-sm font-semibold">Rol</label>
             <select className={inputClass(false)} {...regEdit('role', { required: true })}>
               {CLINIC_STAFF_ROLES.map((r) => (
-                <option key={r.value} value={r.value>
+                <option key={r.value} value={r.value}>
                   {r.label}
                   {r.value === 'doctor' ? ' (agenda)' : ''}
                 </option>
@@ -444,7 +442,6 @@ export default function ClinicStaffPage() {
         </form>
       </Modal>
 
-      {/* Reset password */}
       <Modal
         open={!!resetMember}
         onClose={() => setResetMember(null)}
