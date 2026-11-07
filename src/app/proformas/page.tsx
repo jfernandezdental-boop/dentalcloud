@@ -11,7 +11,7 @@ import { useAuth } from '@/components/AuthProvider';
 import { Field, fld, btnGhost, btnPrimary, money, today } from '@/app/patient-record/components/tabs/formKit';
 import { linkApprovedProformaToFinance } from '@/lib/financeLink';
 
-type Line = { piece: string; procedure: string; qty: number; unit_price: number; discount: number };
+type Line = { piece: string; procedure: string; qty: number; unit_price: number | ''; discount: number | '' };
 type Budget = {
   id: string;
   code: string;
@@ -25,14 +25,14 @@ type Budget = {
 };
 
 const STATUSES = ['Borrador', 'Enviada', 'Aprobada', 'Parcialmente pagada', 'Pagada'];
-const blank = (): Line => ({ piece: '', procedure: '', qty: 1, unit_price: 0, discount: 0 });
-const lineNet = (l: { qty: number | null; unit_price: number | null; discount?: number | null }) => {
+const blank = (): Line => ({ piece: '', procedure: '', qty: 1, unit_price: '', discount: '' });
+const lineNet = (l: { qty: number | null; unit_price: number | null | ''; discount?: number | null | '' }) => {
   const q = Number(l.qty) || 0;
   const u = Number(l.unit_price) || 0;
   const d = Math.min(100, Math.max(0, Number(l.discount) || 0));
   return q * u * (1 - d / 100);
 };
-const totalOf = (ls: { qty: number | null; unit_price: number | null; discount?: number | null }[]) =>
+const totalOf = (ls: { qty: number | null; unit_price: number | null | ''; discount?: number | null | '' }[]) =>
   ls.reduce((a, l) => a + lineNet(l), 0);
 
 /**
@@ -111,8 +111,8 @@ export default function ProformasPage() {
             piece: l.piece || '',
             procedure: l.procedure,
             qty: l.qty || 1,
-            unit_price: Number(l.unit_price || 0),
-            discount: Number(l.discount || 0),
+            unit_price: l.unit_price == null || Number(l.unit_price) === 0 ? '' : Number(l.unit_price),
+            discount: l.discount == null || Number(l.discount) === 0 ? '' : Number(l.discount),
           }))
         : [blank()],
     );
@@ -123,7 +123,13 @@ export default function ProformasPage() {
       ls.map((l, idx) => {
         if (idx !== i) return l;
         const next = { ...l, ...patch };
-        if (patch.discount !== undefined) next.discount = Math.min(100, Math.max(0, Number(patch.discount) || 0));
+        if (patch.unit_price !== undefined) {
+          next.unit_price = patch.unit_price === '' ? '' : Number(patch.unit_price) || 0;
+        }
+        if (patch.discount !== undefined) {
+          next.discount =
+            patch.discount === '' ? '' : Math.min(100, Math.max(0, Number(patch.discount) || 0));
+        }
         return next;
       }),
     );
@@ -176,8 +182,8 @@ export default function ProformasPage() {
         piece: l.piece.trim() || null,
         procedure: l.procedure.trim(),
         qty: l.qty,
-        unit_price: l.unit_price,
-        discount: l.discount || 0,
+        unit_price: Number(l.unit_price) || 0,
+        discount: Number(l.discount) || 0,
       }));
       let linesIns = await sb.from('budget_lines').insert(payload);
       if (linesIns.error && /discount/i.test(linesIns.error.message || '')) {
@@ -186,9 +192,9 @@ export default function ProformasPage() {
             clinic_id: user.clinicId,
             budget_id: budgetId,
             piece: l.piece.trim() || null,
-            procedure: l.discount > 0 ? `${l.procedure.trim()} (−${l.discount}%)` : l.procedure.trim(),
+            procedure: Number(l.discount) > 0 ? `${l.procedure.trim()} (−${l.discount}%)` : l.procedure.trim(),
             qty: l.qty,
-            unit_price: Number((l.unit_price * (1 - l.discount / 100)).toFixed(2)),
+            unit_price: Number(((Number(l.unit_price) || 0) * (1 - (Number(l.discount) || 0) / 100)).toFixed(2)),
           })),
         );
       }
@@ -235,7 +241,6 @@ export default function ProformasPage() {
     setSaving(false);
     if (be) return setToast(`Paciente creado, pero no se vinculó el presupuesto: ${be.message}`);
 
-    // Factura / cargo: copia patient_id, guest_name y guest_phone del presupuesto
     const tot = totalOf(acceptFor.budget_lines);
     const concept = acceptFor.budget_lines.map((l) => l.procedure).join('; ').slice(0, 180);
     linkApprovedProformaToFinance({
@@ -388,8 +393,8 @@ export default function ProformasPage() {
                 <Field label={i === 0 ? 'Pieza' : ''} className="col-span-1"><input className={fld} value={l.piece} onChange={(e) => setLine(i, { piece: e.target.value })} /></Field>
                 <Field label={i === 0 ? 'Procedimiento *' : ''} className="col-span-4"><input className={fld} value={l.procedure} onChange={(e) => setLine(i, { procedure: e.target.value })} /></Field>
                 <Field label={i === 0 ? 'Cant.' : ''} className="col-span-1"><input type="number" min="1" className={fld} value={l.qty} onChange={(e) => setLine(i, { qty: Number(e.target.value) })} /></Field>
-                <Field label={i === 0 ? 'P. unitario' : ''} className="col-span-2"><input type="number" min="0" step="0.01" className={fld} value={l.unit_price} onChange={(e) => setLine(i, { unit_price: Number(e.target.value) })} /></Field>
-                <Field label={i === 0 ? 'Desc. %' : ''} className="col-span-2"><input type="number" min="0" max="100" className={fld} value={l.discount} onChange={(e) => setLine(i, { discount: Number(e.target.value) })} /></Field>
+                <Field label={i === 0 ? 'P. unitario' : ''} className="col-span-2"><input type="number" min="0" step="0.01" className={fld} value={l.unit_price} onChange={(e) => setLine(i, { unit_price: e.target.value === '' ? '' : Number(e.target.value) })} placeholder="" /></Field>
+                <Field label={i === 0 ? 'Desc. %' : ''} className="col-span-2"><input type="number" min="0" max="100" className={fld} value={l.discount} onChange={(e) => setLine(i, { discount: e.target.value === '' ? '' : Number(e.target.value) })} placeholder="" /></Field>
                 <div className="col-span-1 mb-2 text-right text-xs font-semibold">{money(lineNet(l))}</div>
                 <button type="button" className="col-span-1 mb-1 rounded-md p-2 text-muted-foreground hover:bg-muted" onClick={() => setLines((ls) => (ls.length > 1 ? ls.filter((_, k) => k !== i) : ls))}>
                   <Icon name="TrashIcon" size={16} />
@@ -418,11 +423,11 @@ export default function ProformasPage() {
           }
         >
           <div className="grid gap-3 sm:grid-cols-2">
-            <Field label="Nombres *"><input className={fld} value={reg.first_name} onChange={(e) => setReg((s) => ({ ...s, first_name: e.target.value }))} /></Field>
-            <Field label="Apellidos *"><input className={fld} value={reg.last_name} onChange={(e) => setReg((s) => ({ ...s, last_name: e.target.value }))} /></Field>
-            <Field label="Cédula *"><input className={fld} value={reg.cedula} onChange={(e) => setReg((s) => ({ ...s, cedula: e.target.value }))} /></Field>
-            <Field label="Teléfono"><input className={fld} value={reg.phone} onChange={(e) => setReg((s) => ({ ...s, phone: e.target.value }))} /></Field>
-            <Field label="Email" className="sm:col-span-2"><input className={fld} value={reg.email} onChange={(e) => setReg((s) => ({ ...s, email: e.target.value }))} /></Field>
+            <Field label="Nombres *"><input className={fld} value={reg.first_name} onChange={(e) => setReg({ ...reg, first_name: e.target.value })} /></Field>
+            <Field label="Apellidos *"><input className={fld} value={reg.last_name} onChange={(e) => setReg({ ...reg, last_name: e.target.value })} /></Field>
+            <Field label="Cédula *"><input className={fld} value={reg.cedula} onChange={(e) => setReg({ ...reg, cedula: e.target.value })} /></Field>
+            <Field label="Teléfono"><input className={fld} value={reg.phone} onChange={(e) => setReg({ ...reg, phone: e.target.value })} /></Field>
+            <Field label="Email" className="sm:col-span-2"><input className={fld} value={reg.email} onChange={(e) => setReg({ ...reg, email: e.target.value })} /></Field>
           </div>
         </Modal>
 
