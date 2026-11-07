@@ -11,14 +11,41 @@ export type SessionUser = {
   clinicName: string | null;
   clinicCity: string | null;
   clinicPlan: string | null;
-  /** true solo para la clinica de demostracion (MSP-DEMO-*): unica que puede ver datos de ejemplo */
+  /**
+   * true SOLO para la clínica de demostración de la plataforma.
+   * Cualquier clínica creada (p. ej. Estudio dental Vittoria) es producción → false.
+   */
   clinicIsDemo: boolean;
 };
 
+/** Códigos MSP reservados exclusivamente a la clínica demo de referencia. */
+const DEMO_MSP_CODES = new Set(['MSP-DEMO-001', 'MSP-DEMO']);
+
+/**
+ * Una clínica es demo solo si:
+ * - is_demo === true en la tabla clinics, o
+ * - msp_code es exactamente un código demo de plataforma (MSP-DEMO-001).
+ *
+ * NO se usa startsWith('MSP-DEMO') para no marcar por error clínicas reales.
+ */
+export function resolveClinicIsDemo(clinic: {
+  is_demo?: boolean | null;
+  msp_code?: string | null;
+  name?: string | null;
+} | null | undefined): boolean {
+  if (!clinic) return false;
+  if (clinic.is_demo === true) return true;
+  const msp = String(clinic.msp_code || '')
+    .toUpperCase()
+    .trim();
+  if (msp && DEMO_MSP_CODES.has(msp)) return true;
+  return false;
+}
+
 /**
  * La identidad sale SIEMPRE de la base de datos (tabla profiles + clinics, protegidas por RLS).
- * Nunca se confia en user_metadata (el propio usuario puede editarlo al registrarse) ni en
- * correos fijos en el codigo. Si el perfil no existe, esta inactivo o no se puede leer, no hay sesion.
+ * Nunca se confía en user_metadata (el propio usuario puede editarlo al registrarse) ni en
+ * correos fijos en el código. Si el perfil no existe, está inactivo o no se puede leer, no hay sesión.
  */
 export async function getSessionUser(): Promise<SessionUser | null> {
   const supabase = getSupabase();
@@ -44,16 +71,37 @@ export async function getSessionUser(): Promise<SessionUser | null> {
 
   if (!isSuper && profile.clinic_id) {
     clinicId = String(profile.clinic_id);
-    const { data: clinic } = await supabase
+    // is_demo puede no existir aún: si falla el select, reintentamos sin esa columna
+    let clinic: {
+      name?: string | null;
+      city?: string | null;
+      plan?: string | null;
+      msp_code?: string | null;
+      is_demo?: boolean | null;
+    } | null = null;
+
+    const full = await supabase
       .from('clinics')
-      .select('name, city, plan, msp_code')
+      .select('name, city, plan, msp_code, is_demo')
       .eq('id', clinicId)
       .maybeSingle();
+
+    if (full.error && /is_demo/i.test(full.error.message || '')) {
+      const basic = await supabase
+        .from('clinics')
+        .select('name, city, plan, msp_code')
+        .eq('id', clinicId)
+        .maybeSingle();
+      clinic = basic.data as typeof clinic;
+    } else {
+      clinic = full.data as typeof clinic;
+    }
+
     if (clinic) {
       clinicName = clinic.name ?? null;
       clinicCity = clinic.city ?? null;
       clinicPlan = clinic.plan ?? null;
-      clinicIsDemo = String(clinic.msp_code || '').toUpperCase().startsWith('MSP-DEMO');
+      clinicIsDemo = resolveClinicIsDemo(clinic);
     }
   }
 
