@@ -43,7 +43,7 @@ function storageKey(clinicId: string) {
   return `dentalcloud_clinic_staff_${clinicId}`;
 }
 
-/** Ya no se guardan usuarios "locales": solo existe lo que esta en la base. Se limpia lo que dejo la version anterior. */
+/** Ya no se guardan usuarios "locales": solo existe lo que esta en la base. */
 export function listLocalStaff(clinicId: string): StaffMember[] {
   if (typeof window !== 'undefined' && clinicId) {
     try {
@@ -70,9 +70,19 @@ export async function listClinicStaffFromDb(clinicId: string): Promise<StaffMemb
 const DB_ROLE_TO_APP: Record<string, ClinicStaffRole> = {
   admin: 'admin',
   odontologo: 'doctor',
+  doctor: 'doctor',
   recepcion: 'receptionist',
+  receptionist: 'receptionist',
   auxiliar: 'staff',
   contador: 'staff',
+  staff: 'staff',
+};
+
+const APP_ROLE_TO_DB: Record<ClinicStaffRole, string> = {
+  admin: 'admin',
+  doctor: 'odontologo',
+  receptionist: 'recepcion',
+  staff: 'auxiliar',
 };
 
 function mapProfile(row: Record<string, unknown>): StaffMember {
@@ -90,9 +100,41 @@ function mapProfile(row: Record<string, unknown>): StaffMember {
   };
 }
 
+/** Si el rol es odontologo, asegura fila en tabla doctors para la agenda. */
+async function ensureDoctorRow(params: {
+  clinicId: string;
+  profileId: string;
+  fullName: string;
+  active?: boolean;
+}) {
+  const sb = getSupabase();
+  const { data: existing } = await sb
+    .from('doctors')
+    .select('id')
+    .eq('clinic_id', params.clinicId)
+    .eq('profile_id', params.profileId)
+    .maybeSingle();
+  if (existing?.id) {
+    await sb
+      .from('doctors')
+      .update({
+        full_name: params.fullName,
+        active: params.active !== false,
+      })
+      .eq('id', existing.id);
+    return;
+  }
+  await sb.from('doctors').insert({
+    clinic_id: params.clinicId,
+    profile_id: params.profileId,
+    full_name: params.fullName,
+    specialty: 'Odontología general',
+    active: params.active !== false,
+  });
+}
+
 /**
  * Alta de personal: Edge Function clinicas / invitar_personal.
- * Si el backend aun no expone la accion, se guarda en local y se informa.
  */
 export async function inviteClinicStaff(input: InviteStaffInput): Promise<{ member: StaffMember; message: string }> {
   const email = normalizeEmail(input.email);
@@ -128,8 +170,22 @@ export async function inviteClinicStaff(input: InviteStaffInput): Promise<{ memb
   }
   if (data?.error) throw new Error(friendlyAuthError(String(data.error)));
 
+  const userId = String(data.user_id);
+  if (input.role === 'doctor') {
+    try {
+      await ensureDoctorRow({
+        clinicId: input.clinicId,
+        profileId: userId,
+        fullName: input.fullName.trim(),
+        active: true,
+      });
+    } catch {
+      /* agenda puede crear el odontologo despues */
+    }
+  }
+
   const member: StaffMember = {
-    id: String(data.user_id),
+    id: userId,
     fullName: input.fullName.trim(),
     email,
     phone: input.phone,
@@ -139,5 +195,117 @@ export async function inviteClinicStaff(input: InviteStaffInput): Promise<{ memb
     createdAt: new Date().toISOString().slice(0, 10),
     source: 'server',
   };
-  return { member, message: `Usuario creado. Ya puede ingresar con ${email}.` };
+  return {
+    member,
+    message:
+      input.role === 'doctor'
+        ? `Odontólogo creado. Ya puede ingresar con ${email} y aparece en la agenda.`
+        : `Usuario creado. Ya puede ingresar con ${email}.`,
+  };
+}
+
+export async function updateClinicStaff(input: {
+  id: string;
+  clinicId: string;
+  fullName: string;
+  phone?: string;
+  role: ClinicStaffRole;
+}): Promise<void> {
+  const sb = getSupabase();
+  const { error } = await sb
+    .from('profiles')
+    .update({
+      full_name: input.fullName.trim(),
+      phone: input.phone?.trim() || null,
+      role_key: APP_ROLE_TO_DB[input.role] || input.role,
+    })
+    .eq('id', input.id)
+    .eq('clinic_id', input.clinicId);
+  if (error) throw new Error(friendlyAuthError(error.message));
+
+  if (input.role === 'doctor') {
+    await ensureDoctorRow({
+      clinicId: input.clinicId,
+      profileId: input.id,
+      fullName: input.fullName.trim(),
+      active: true,
+    });
+  } else {
+    // Desactiva fila de doctor si ya no es odontologo
+    await sb
+      .from('doctors')
+      .update({ active: false })
+      .eq('clinic_id', input.clinicId)
+      .eq('profile_id', input.id);
+  }
+}
+
+export async function setClinicStaffActive(input: {
+  id: string;
+  clinicId: string;
+  active: boolean;
+  role?: ClinicStaffRole;
+  fullName?: string;
+}): Promise<void> {
+  const sb = getSupabase();
+  const { error } = await sb
+    .from('profiles')
+    .update({ active: input.active })
+    .eq('id', input.id)
+    .eq('clinic_id', input.clinicId);
+  if (error) throw new Error(friendlyAuthError(error.message));
+
+  if (input.role === 'doctor' || input.fullName) {
+    await sb
+      .from('doctors')
+      .update({ active: input.active, ...(input.fullName ? { full_name: input.fullName } : {}) })
+      .eq('clinic_id', input.clinicId)
+      .eq('profile_id', input.id);
+  }
+}
+
+/** Soft-delete: desactiva el perfil (y el doctor si aplica). */
+export async function deactivateClinicStaff(input: {
+  id: string;
+  clinicId: string;
+}): Promise<void> {
+  await setClinicStaffActive({ ...input, active: false });
+}
+
+/**
+ * Reset de clave via Edge Function. Si no existe la accion, informa al admin.
+ */
+export async function resetClinicStaffPassword(input: {
+  id: string;
+  clinicId: string;
+  email: string;
+  password: string;
+}): Promise<string> {
+  if (!input.password || input.password.length < 8) {
+    throw new Error('La contraseña debe tener al menos 8 caracteres');
+  }
+  const { data, error } = await getSupabase().functions.invoke('clinicas', {
+    body: {
+      action: 'reset_password',
+      clinic_id: input.clinicId,
+      user_id: input.id,
+      email: input.email,
+      password: input.password,
+    },
+  });
+  if (error) {
+    let msg = error.message || 'No se pudo restablecer la contraseña';
+    try {
+      const j = await (error as { context?: Response }).context?.json();
+      if (j?.error) msg = j.error;
+    } catch {
+      /* */
+    }
+    throw new Error(
+      friendlyAuthError(msg) +
+        ' Si el backend no soporta reset aún, usa «Recuperar contraseña» en el login.',
+    );
+  }
+  if (data?.error) throw new Error(friendlyAuthError(String(data.error)));
+  return 'Contraseña actualizada. El usuario ya puede ingresar con la nueva clave.';
 }
