@@ -87,6 +87,9 @@ export const toothLabel = (n: number): string => {
 
 export const emptyTooth = (): ToothState => ({ surfaces: {}, marks: [] });
 
+/** Odontograma limpio: paciente nuevo o sin revisiones. */
+export const emptyData = (): OdontogramData => ({ chart: {}, recession: {}, mobility: {} });
+
 export const cloneData = (d: OdontogramData): OdontogramData => ({
   chart: Object.fromEntries(
     Object.entries(d.chart).map(([k, v]) => [k, { surfaces: { ...v.surfaces }, marks: [...v.marks], note: v.note }])
@@ -95,6 +98,7 @@ export const cloneData = (d: OdontogramData): OdontogramData => ({
   mobility: { ...d.mobility },
 });
 
+/** Solo para maquetas/demo. No usar en clínicas reales. */
 export const initialChart: ChartState = {
   '16': { surfaces: { O: 'obturado', M: 'obturado' }, marks: [] },
   '26': { surfaces: { O: 'obturado', D: 'obturado' }, marks: [] },
@@ -116,7 +120,6 @@ export const initialData: OdontogramData = {
   mobility: { '31': '1', '41': '2', '36': '1' },
 };
 
-/** Marcas que son excluyentes entre sí a nivel de pieza (no pueden coexistir) */
 const exclusiveGroups: ToolId[][] = [
   ['sellante-necesario', 'sellante-realizado'],
   ['endodoncia-por-realizar', 'endodoncia-realizada'],
@@ -130,7 +133,6 @@ const exclusiveGroups: ToolId[][] = [
 const isEmptyTooth = (t: ToothState) =>
   Object.keys(t.surfaces).length === 0 && t.marks.length === 0 && !t.note;
 
-/** Aplica una herramienta sobre una pieza/superficie y devuelve un nuevo ChartState (puro) */
 export function applyTool(chart: ChartState, tool: ToolId, tooth: number, surface?: Surface): ChartState {
   const key = String(tooth);
   const current = chart[key] ?? emptyTooth();
@@ -223,7 +225,6 @@ export interface BudgetLine {
   price: number;
 }
 
-/** Genera líneas de proforma a partir de los hallazgos pendientes (rojo) */
 export function buildBudgetLines(chart: ChartState): BudgetLine[] {
   return buildFindings(chart)
     .filter((f) => f.tone === 'danger')
