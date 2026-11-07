@@ -1,8 +1,9 @@
 'use client';
 import React from 'react';
+import { useAuth } from '@/components/AuthProvider';
 import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, Legend } from 'recharts';
 
-const data = [
+const DEMO_DATA = [
   { id: 'm-may', mes: 'May', ingresos: 18400, gastos: 12100 },
   { id: 'm-jun', mes: 'Jun', ingresos: 21250, gastos: 13800 },
   { id: 'm-jul', mes: 'Jul', ingresos: 19780, gastos: 14950 },
@@ -26,27 +27,47 @@ function MoneyTooltip({ active, payload, label }: { active?: boolean; payload?: 
 }
 
 export default function IncomeExpenseChart() {
+  const { user } = useAuth();
+  const data = user?.clinicIsDemo ? DEMO_DATA : [];
+  const utilidad = data.length
+    ? data[data.length - 1].ingresos - data[data.length - 1].gastos
+    : 0;
+
   return (
     <div className="rounded-2xl border border-border bg-card p-5">
       <div className="mb-4 flex items-start justify-between">
         <div>
           <h3 className="text-base font-semibold">Ingresos vs. gastos</h3>
-          <p className="text-xs text-muted-foreground">USD — utilidad octubre: <strong className="tabular text-success">$9 380</strong></p>
+          <p className="text-xs text-muted-foreground">
+            {data.length === 0
+              ? 'Sin movimientos financieros aún'
+              : `USD — utilidad octubre: $${utilidad.toLocaleString('en-US')}`}
+          </p>
         </div>
-        <span className="rounded-full bg-warning/15 px-2.5 py-1 text-xs font-semibold text-warning">Sep: margen 21,8 %</span>
+        {data.length > 0 ? (
+          <span className="rounded-full bg-warning/15 px-2.5 py-1 text-xs font-semibold text-warning">
+            Sep: margen 21,8 %
+          </span>
+        ) : null}
       </div>
       <div className="h-64">
-        <ResponsiveContainer width="100%" height="100%">
-          <BarChart data={data} margin={{ top: 5, right: 8, left: -12, bottom: 0 }} barGap={4}>
-            <CartesianGrid stroke="var(--border)" strokeDasharray="3 3" vertical={false} />
-            <XAxis dataKey="mes" tick={{ fontSize: 12, fill: 'var(--muted-foreground)' }} axisLine={false} tickLine={false} />
-            <YAxis tick={{ fontSize: 12, fill: 'var(--muted-foreground)' }} axisLine={false} tickLine={false} tickFormatter={(v: number) => `${v / 1000}k`} />
-            <Tooltip content={<MoneyTooltip />} cursor={{ fill: 'var(--muted)' }} />
-            <Legend wrapperStyle={{ fontSize: 12 }} iconType="circle" />
-            <Bar dataKey="ingresos" name="Ingresos" fill="var(--primary)" radius={[6, 6, 0, 0]} />
-            <Bar dataKey="gastos" name="Gastos" fill="var(--accent)" radius={[6, 6, 0, 0]} />
-          </BarChart>
-        </ResponsiveContainer>
+        {data.length === 0 ? (
+          <div className="flex h-full items-center justify-center text-sm text-muted-foreground">
+            Los ingresos y gastos de tu clínica alimentarán este gráfico.
+          </div>
+        ) : (
+          <ResponsiveContainer width="100%" height="100%">
+            <BarChart data={data} margin={{ top: 5, right: 8, left: -12, bottom: 0 }} barGap={4}>
+              <CartesianGrid stroke="var(--border)" strokeDasharray="3 3" vertical={false} />
+              <XAxis dataKey="mes" tick={{ fontSize: 12, fill: 'var(--muted-foreground)' }} axisLine={false} tickLine={false} />
+              <YAxis tick={{ fontSize: 12, fill: 'var(--muted-foreground)' }} axisLine={false} tickLine={false} tickFormatter={(v: number) => `${v / 1000}k`} />
+              <Tooltip content={<MoneyTooltip />} cursor={{ fill: 'var(--muted)' }} />
+              <Legend wrapperStyle={{ fontSize: 12 }} iconType="circle" />
+              <Bar dataKey="ingresos" name="Ingresos" fill="var(--primary)" radius={[6, 6, 0, 0]} />
+              <Bar dataKey="gastos" name="Gastos" fill="var(--accent)" radius={[6, 6, 0, 0]} />
+            </BarChart>
+          </ResponsiveContainer>
+        )}
       </div>
     </div>
   );
