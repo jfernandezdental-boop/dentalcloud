@@ -82,10 +82,9 @@ async function invokeClinicas(body: Record<string, unknown>) {
 }
 
 /**
- * Registro de clinica (Edge Function `clinicas`: admin + clinica + perfil en un solo paso,
- * con rollback si algo falla; no usa signUp, asi que no toca la sesion del admin global):
- * - createdBySuperAdmin: true  -> accion "crear": el servidor exige administrador global.
- * - createdBySuperAdmin: false -> accion "registro_publico": sin sesion, con limite de intentos.
+ * Registro de clinica (Edge Function `clinicas`):
+ * - Toda clínica creada es de PRODUCCIÓN (is_demo = false).
+ * - No se aceptan códigos MSP reservados a la demo de plataforma.
  */
 export async function registerClinic(input: RegisterClinicInput) {
   const email = normalizeEmail(input.adminEmail);
@@ -102,6 +101,13 @@ export async function registerClinic(input: RegisterClinicInput) {
     throw new Error('Nombre de clinica y RUC son obligatorios');
   }
 
+  const msp = (input.mspCode || '').trim().toUpperCase();
+  if (msp === 'MSP-DEMO' || msp === 'MSP-DEMO-001' || msp.startsWith('MSP-DEMO')) {
+    throw new Error(
+      'El código MSP-DEMO está reservado a la clínica de demostración de la plataforma. Usa el código real de tu clínica.',
+    );
+  }
+
   const data = await invokeClinicas({
     action: asGlobal ? 'crear' : 'registro_publico',
     clinica: {
@@ -110,6 +116,8 @@ export async function registerClinic(input: RegisterClinicInput) {
       msp_code: input.mspCode?.trim() || null,
       city: input.city?.trim() || null,
       plan: input.plan || 'inicial',
+      // Producción por defecto: nunca demo al crear desde el panel o registro público
+      is_demo: false,
     },
     admin: {
       full_name: input.adminName.trim(),
