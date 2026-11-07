@@ -1,8 +1,10 @@
 'use client';
-import React, { useState } from 'react';
+import React, { useCallback, useEffect, useState } from 'react';
 import Icon from '@/components/ui/AppIcon';
 import Badge from '@/components/ui/Badge';
 import EmptyState from '@/components/ui/EmptyState';
+import { useAuth } from '@/components/AuthProvider';
+import { getSupabase } from '@/lib/supabase/client';
 
 interface Waiting {
   id: string;
@@ -14,14 +16,6 @@ interface Waiting {
   status: 'En sala' | 'En atencion' | 'Confirmada' | 'Pendiente';
 }
 
-const initial: Waiting[] = [
-  { id: 'wr-001', patient: 'Jorge Luis Almeida', procedure: 'Resina pieza 14 y 15', doctor: 'Dra. Andrade', waited: 0, slot: '09:30', status: 'En atencion' },
-  { id: 'wr-002', patient: 'Daniela Escobar Ruiz', procedure: 'Colocacion de brackets', doctor: 'Dra. Villavicencio', waited: 18, slot: '10:00', status: 'En sala' },
-  { id: 'wr-003', patient: 'Patricio Naranjo Leon', procedure: 'Retratamiento de conducto', doctor: 'Dr. Moscoso', waited: 6, slot: '10:30', status: 'En sala' },
-  { id: 'wr-004', patient: 'Lucia Fernanda Mora', procedure: 'Valoracion y proforma', doctor: 'Dra. Andrade', waited: 0, slot: '11:00', status: 'Confirmada' },
-  { id: 'wr-005', patient: 'Esteban Quishpe', procedure: 'Extraccion pieza 48', doctor: 'Dra. Andrade', waited: 0, slot: '11:30', status: 'Confirmada' },
-];
-
 const tone: Record<Waiting['status'], 'success' | 'accent' | 'info' | 'warning'> = {
   'En atencion': 'success',
   'En sala': 'accent',
@@ -29,9 +23,93 @@ const tone: Record<Waiting['status'], 'success' | 'accent' | 'info' | 'warning'>
   Pendiente: 'warning',
 };
 
+function mapStatus(raw: string): Waiting['status'] {
+  const s = (raw || '').toLowerCase();
+  if (s.includes('atenci')) return 'En atencion';
+  if (s.includes('sala') || s.includes('espera')) return 'En sala';
+  if (s.includes('confirm')) return 'Confirmada';
+  return 'Pendiente';
+}
+
+function todayISO() {
+  const d = new Date();
+  const p = (n: number) => String(n).padStart(2, '0');
+  return `${d.getFullYear()}-${p(d.getMonth() + 1)}-${p(d.getDate())}`;
+}
+
 export default function WaitingRoomPanel() {
-  const [rows, setRows] = useState<Waiting[]>(initial);
+  const { user } = useAuth();
+  const [rows, setRows] = useState<Waiting[]>([]);
+  const [loading, setLoading] = useState(true);
   const [removing, setRemoving] = useState('');
+
+  const load = useCallback(async () => {
+    if (!user?.clinicId || user.clinicIsDemo) {
+      // Demo: vacío también (no inventamos pacientes); la agenda demo tiene su propia UI
+      setRows([]);
+      setLoading(false);
+      return;
+    }
+    setLoading(true);
+    const day = todayISO();
+    const sb = getSupabase();
+    // Preferimos start_time/date locales; fallback a starts_at
+    let { data, error } = await sb
+      .from('appointments')
+      .select('id, status, start_time, starts_at, procedure, type, notes, patients(first_name, last_name, full_name), doctors(full_name, name)')
+      .eq('clinic_id', user.clinicId)
+      .eq('date', day)
+      .order('start_time', { ascending: true })
+      .limit(40);
+
+    if (error) {
+      const r2 = await sb
+        .from('appointments')
+        .select('id, status, starts_at, procedure, type, notes, patient_name, doctor_name')
+        .eq('clinic_id', user.clinicId)
+        .gte('starts_at', `${day}T00:00:00`)
+        .lte('starts_at', `${day}T23:59:59`)
+        .order('starts_at', { ascending: true })
+        .limit(40);
+      data = r2.data as typeof data;
+      error = r2.error;
+    }
+
+    if (error || !data) {
+      setRows([]);
+      setLoading(false);
+      return;
+    }
+
+    const mapped: Waiting[] = (data as Record<string, unknown>[]).map((a) => {
+      const pat = a.patients as Record<string, unknown> | null;
+      const doc = a.doctors as Record<string, unknown> | null;
+      const patient =
+        (pat
+          ? String(pat.full_name || [pat.first_name, pat.last_name].filter(Boolean).join(' '))
+          : '') ||
+        String(a.patient_name || 'Paciente');
+      const doctor =
+        (doc ? String(doc.full_name || doc.name || '') : '') || String(a.doctor_name || '—');
+      const slotRaw = String(a.start_time || a.starts_at || '');
+      const slot = slotRaw.includes('T') ? slotRaw.slice(11, 16) : slotRaw.slice(0, 5);
+      return {
+        id: String(a.id),
+        patient,
+        procedure: String(a.procedure || a.type || a.notes || 'Cita'),
+        doctor,
+        waited: 0,
+        slot: slot || '—',
+        status: mapStatus(String(a.status || '')),
+      };
+    });
+    setRows(mapped);
+    setLoading(false);
+  }, [user?.clinicId, user?.clinicIsDemo]);
+
+  useEffect(() => {
+    void load();
+  }, [load]);
 
   const advance = (id: string) => {
     setRows((prev) =>
@@ -58,20 +136,28 @@ export default function WaitingRoomPanel() {
       <div className="flex items-center justify-between border-b border-border px-5 py-4">
         <div>
           <h3 className="text-base font-semibold">Sala de espera y cola</h3>
-          <p className="text-xs text-muted-foreground">{rows.length} pacientes por atender</p>
+          <p className="text-xs text-muted-foreground">
+            {loading ? 'Cargando…' : `${rows.length} pacientes por atender`}
+          </p>
         </div>
-        <Badge tone="accent" dot>
-          En vivo
-        </Badge>
+        <button
+          type="button"
+          onClick={() => void load()}
+          className="rounded-lg border border-input p-2 text-muted-foreground hover:bg-muted"
+          aria-label="Actualizar"
+        >
+          <Icon name="ArrowPathIcon" size={16} />
+        </button>
       </div>
 
-      {rows.length === 0 ? (
-        <div className="p-5">
+      {loading ? (
+        <div className="h-40 animate-pulse bg-muted/40" />
+      ) : rows.length === 0 ? (
+        <div className="p-6">
           <EmptyState
             icon={<Icon name="UserGroupIcon" size={24} />}
-            title="No hay pacientes en cola"
-            description="Cuando se confirme una cita aparecera aqui."
-            actionLabel="Agendar cita"
+            title="Sin pacientes en cola"
+            description="Las citas de hoy aparecerán aquí cuando estén agendadas."
           />
         </div>
       ) : (
@@ -79,40 +165,33 @@ export default function WaitingRoomPanel() {
           {rows.map((r) => (
             <li
               key={r.id}
-              className={`group flex items-start gap-3 px-5 py-3.5 hover:bg-muted/50 ${removing === r.id ? 'opacity-0' : 'opacity-100'}`}
+              className={`px-5 py-3 transition-opacity ${removing === r.id ? 'opacity-0' : 'opacity-100'}`}
             >
-              <span className="mt-0.5 flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-primary/10 text-xs font-bold text-primary">
-                {r.patient
-                  .split(' ')
-                  .slice(0, 2)
-                  .map((p) => p[0])
-                  .join('')}
-              </span>
-              <div className="min-w-0 flex-1">
-                <div className="flex items-center justify-between gap-2">
+              <div className="flex items-start justify-between gap-2">
+                <div className="min-w-0">
                   <p className="truncate text-sm font-semibold">{r.patient}</p>
-                  <span className="tabular text-xs font-semibold text-muted-foreground">{r.slot}</span>
+                  <p className="truncate text-xs text-muted-foreground">{r.procedure}</p>
+                  <p className="mt-0.5 text-[11px] text-muted-foreground">
+                    {r.slot} · {r.doctor}
+                  </p>
                 </div>
-                <p className="truncate text-xs text-muted-foreground">
-                  {r.procedure} · {r.doctor}
-                </p>
-                <div className="mt-1.5 flex items-center gap-2">
-                  <Badge tone={tone[r.status]}>{r.status}</Badge>
-                  {r.waited > 15 ? (
-                    <span className="text-xs font-semibold text-destructive">{r.waited} min</span>
-                  ) : null}
-                  <span className="ml-auto flex gap-1 opacity-0 group-hover:opacity-100">
-                    {r.status !== 'En atencion' ? (
-                      <button type="button" onClick={() => advance(r.id)} className="rounded-md bg-primary/10 p-1.5 text-primary">
-                        <Icon name="ArrowRightIcon" size={14} />
-                      </button>
-                    ) : (
-                      <button type="button" onClick={() => finish(r.id)} className="rounded-md bg-success/15 p-1.5 text-success">
-                        <Icon name="CheckIcon" size={14} />
-                      </button>
-                    )}
-                  </span>
-                </div>
+                <Badge tone={tone[r.status]}>{r.status}</Badge>
+              </div>
+              <div className="mt-2 flex gap-2">
+                <button
+                  type="button"
+                  onClick={() => advance(r.id)}
+                  className="rounded-md border px-2 py-1 text-[11px] font-semibold hover:bg-muted"
+                >
+                  Avanzar
+                </button>
+                <button
+                  type="button"
+                  onClick={() => finish(r.id)}
+                  className="rounded-md border px-2 py-1 text-[11px] font-semibold text-muted-foreground hover:bg-muted"
+                >
+                  Finalizar
+                </button>
               </div>
             </li>
           ))}
