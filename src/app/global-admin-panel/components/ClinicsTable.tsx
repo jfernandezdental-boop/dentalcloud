@@ -18,12 +18,12 @@ function isDemoClinic(name: string) {
   return /sonrisa\s*boreal/i.test(name);
 }
 
-function statusTone(status: string): 'success' | 'warning' | 'destructive' | 'default' {
+function statusTone(status: string): 'success' | 'warning' | 'danger' | 'neutral' {
   const s = status.toLowerCase();
-  if (s.includes('activ')) return 'success';
+  if (s.includes('susp') || s.includes('inactiv') || s.includes('vencid')) return 'danger';
   if (s.includes('prueba') || s.includes('pend')) return 'warning';
-  if (s.includes('susp') || s.includes('inactiv') || s.includes('vencid')) return 'destructive';
-  return 'default';
+  if (s.includes('activ')) return 'success';
+  return 'neutral';
 }
 
 export default function ClinicsTable() {
@@ -69,126 +69,106 @@ export default function ClinicsTable() {
   );
 
   const toggleActive = async (c: ClinicRecord) => {
-    const active = !String(c.status).toLowerCase().includes('activ');
-    // if currently activa -> suspend; if suspendida -> activa
     const currentlyActive = /activ/i.test(c.status) && !/inactiv/i.test(c.status);
     const nextActive = !currentlyActive;
-    if (
-      !confirm(
-        nextActive
-          ? `Activar la clinica "${c.name}"?`
-          : `Desactivar (suspender) la clinica "${c.name}"? Los usuarios de esa clinica no deberian operar hasta reactivar.`,
-      )
-    ) {
+    setBusyId(c.id);
+    const { error: err } = await setClinicActive(c.id, nextActive);
+    setBusyId(null);
+    if (err) {
+      setToast(err);
       return;
     }
-    setBusyId(c.id);
-    try {
-      await setClinicActive(c.table, c.id, nextActive);
-      setToast(nextActive ? 'Clinica activada' : 'Clinica desactivada');
-      await load();
-    } catch (e: unknown) {
-      setToast(e instanceof Error ? e.message : 'No se pudo cambiar el estado');
-    } finally {
-      setBusyId(null);
-    }
+    setToast(nextActive ? 'Clínica activada' : 'Clínica desactivada');
+    load();
   };
 
   const resetPassword = async (c: ClinicRecord) => {
-    if (!c.adminEmail) {
-      setToast('Sin email de admin en esta clinica; editala y guarda el correo');
+    const pwd = window.prompt(`Nueva contraseña temporal para el admin de «${c.name}» (mín. 8 caracteres):`);
+    if (!pwd) return;
+    if (pwd.length < 8) {
+      setToast('La contraseña debe tener al menos 8 caracteres');
       return;
     }
-    if (!confirm(`Enviar enlace de restablecimiento de contrasena a ${c.adminEmail}?`)) return;
     setBusyId(c.id);
-    try {
-      await resetClinicAdminPassword(c.adminEmail);
-      setToast(`Email de restablecimiento enviado a ${c.adminEmail}`);
-    } catch (e: unknown) {
-      setToast(e instanceof Error ? e.message : 'No se pudo enviar el restablecimiento');
-    } finally {
-      setBusyId(null);
+    const { error: err } = await resetClinicAdminPassword(c.id, pwd);
+    setBusyId(null);
+    if (err) {
+      setToast(err);
+      return;
     }
+    setToast('Contraseña del administrador actualizada');
   };
 
   return (
-    <section id="clinicas" className="rounded-2xl border border-border bg-card shadow-sm">
-      <div className="flex flex-wrap items-center justify-between gap-3 border-b border-border px-5 py-4">
+    <section className="rounded-2xl border border-border bg-card">
+      <div className="flex flex-wrap items-center justify-between gap-3 border-b border-border p-5">
         <div>
-          <h2 className="text-lg font-semibold">Clinicas (tenants)</h2>
-          <p className="text-sm text-muted-foreground">
-            Editar, activar/desactivar y restablecer contrasena del admin
+          <h3 className="text-base font-semibold">Clínicas de la red</h3>
+          <p className="text-xs text-muted-foreground">
+            {loading ? 'Cargando…' : `${rows.length} clínicas · datos reales`}
           </p>
         </div>
         <div className="flex flex-wrap items-center gap-2">
           <input
             value={q}
             onChange={(e) => setQ(e.target.value)}
-            placeholder="Buscar clinica..."
-            className="rounded-lg border border-input bg-background px-3 py-2 text-sm"
+            placeholder="Buscar clínica o ciudad"
+            className="w-48 rounded-lg border border-border bg-background px-3 py-2 text-sm"
           />
           <button
             type="button"
-            onClick={() => load()}
-            className="rounded-lg border border-input px-3 py-2 text-sm font-semibold hover:bg-muted"
-          >
-            Actualizar
-          </button>
-          <button
-            type="button"
             onClick={() => setCreateOpen(true)}
-            className="inline-flex items-center gap-2 rounded-lg bg-primary px-4 py-2 text-sm font-semibold text-primary-foreground"
+            className="inline-flex items-center gap-1.5 rounded-lg bg-primary px-3 py-2 text-xs font-semibold text-primary-foreground"
           >
-            <Icon name="PlusIcon" size={16} />
-            Nueva clinica
+            <Icon name="PlusIcon" size={14} /> Nueva clínica
           </button>
         </div>
       </div>
 
       {loading ? (
-        <div className="p-8 text-center text-sm text-muted-foreground">Cargando clinicas...</div>
+        <div className="h-40 animate-pulse bg-muted/40" />
       ) : error && filtered.length === 0 ? (
         <div className="p-6">
-          <EmptyState title="No se pudieron cargar clinicas" description={error} />
+          <EmptyState
+            icon={<Icon name="BuildingOffice2Icon" size={24} />}
+            title="No se pudieron cargar las clínicas"
+            description={error}
+          />
         </div>
       ) : filtered.length === 0 ? (
         <div className="p-6">
-          <EmptyState title="Sin clinicas" description="Crea la primera clinica real." />
+          <EmptyState
+            icon={<Icon name="BuildingOffice2Icon" size={24} />}
+            title="Sin clínicas"
+            description="Crea la primera clínica de la red."
+          />
         </div>
       ) : (
         <div className="overflow-x-auto">
-          <table className="w-full text-left text-sm">
-            <thead className="border-b border-border bg-muted/40 text-xs uppercase text-muted-foreground">
+          <table className="w-full min-w-[900px] text-left text-sm">
+            <thead className="bg-muted/60 text-xs uppercase text-muted-foreground">
               <tr>
-                <th className="px-5 py-3">Clinica</th>
-                <th className="px-3 py-3">Ciudad</th>
-                <th className="px-3 py-3">Plan</th>
-                <th className="px-3 py-3">Admin</th>
-                <th className="px-3 py-3">Estado</th>
-                <th className="px-3 py-3">Alta</th>
-                <th className="px-3 py-3 text-right">Acciones</th>
+                {['Clínica', 'Ciudad', 'Plan', 'Estado', 'Alta', 'Acciones'].map((h) => (
+                  <th key={h} className="px-3 py-2.5 font-semibold">
+                    {h}
+                  </th>
+                ))}
               </tr>
             </thead>
-            <tbody>
+            <tbody className="divide-y divide-border">
               {filtered.map((c) => {
                 const currentlyActive = /activ/i.test(c.status) && !/inactiv/i.test(c.status);
                 return (
-                  <tr key={c.id} className="border-b border-border last:border-0">
-                    <td className="px-5 py-3 font-semibold">
-                      {c.name}
+                  <tr key={c.id} className="hover:bg-muted/40">
+                    <td className="px-3 py-3">
+                      <p className="font-semibold">{c.name}</p>
                       {isDemoClinic(c.name) ? (
-                        <span className="ml-2 rounded bg-amber-100 px-1.5 py-0.5 text-[10px] font-bold text-amber-800">
-                          demo
-                        </span>
+                        <span className="text-[10px] font-semibold uppercase tracking-wide text-muted-foreground">Demo plataforma</span>
                       ) : null}
                     </td>
-                    <td className="px-3 py-3">{c.city}</td>
-                    <td className="px-3 py-3">{c.plan}</td>
+                    <td className="px-3 py-3 text-muted-foreground">{c.city || '—'}</td>
                     <td className="px-3 py-3">
-                      <div>{c.admin}</div>
-                      {c.adminEmail ? (
-                        <div className="text-[11px] text-muted-foreground">{c.adminEmail}</div>
-                      ) : null}
+                      {c.plan ? <Badge tone="info">{c.plan}</Badge> : '—'}
                     </td>
                     <td className="px-3 py-3">
                       <Badge tone={statusTone(c.status)}>{c.status}</Badge>
@@ -219,7 +199,7 @@ export default function ClinicsTable() {
                           disabled={busyId === c.id}
                           onClick={() => resetPassword(c)}
                           className="rounded-md border border-input px-2 py-1 text-xs font-semibold hover:bg-muted"
-                          title="Restablecer contrasena"
+                          title="Restablecer contraseña"
                         >
                           Reset clave
                         </button>
@@ -237,7 +217,7 @@ export default function ClinicsTable() {
         open={createOpen}
         onClose={() => setCreateOpen(false)}
         onCreated={() => {
-          setToast('Clinica creada');
+          setToast('Clínica creada');
           load();
         }}
       />
@@ -246,7 +226,7 @@ export default function ClinicsTable() {
         clinic={editClinic}
         onClose={() => setEditClinic(null)}
         onSaved={() => {
-          setToast('Clinica actualizada');
+          setToast('Clínica actualizada');
           load();
         }}
       />
