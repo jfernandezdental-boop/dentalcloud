@@ -1,37 +1,39 @@
 import React from 'react';
 import MetricCard from '@/components/ui/MetricCard';
+import type { PlatformOverview } from '@/lib/supabase/usePlatformOverview';
 
-export default function AdminMetrics() {
+export default function AdminMetrics({ overview, loading }: { overview: PlatformOverview; loading?: boolean }) {
+  const v = (n: number) => (loading ? '—' : String(n));
   return (
-    <section aria-label="Indicadores de plataforma" className="grid grid-cols-1 gap-4 md:grid-cols-2 xl:grid-cols-4">
+    <section className="grid gap-4 md:grid-cols-2 xl:grid-cols-4">
       <MetricCard
-        className="md:col-span-2"
-        tone="hero"
+        label="Clínicas en la red"
+        value={v(overview.clinics_total)}
         icon="BuildingOffice2Icon"
-        label="Clinicas activas"
-        value="214"
-        unit="de 231 registradas"
-        delta="+9 este mes"
-        deltaDirection="up"
-        helper="17 en prueba o suspendidas"
-      >
-        <div className="mt-4 grid grid-cols-3 gap-3 text-xs">
-          {[
-            { id: 'am-1', k: 'Plan Inicial', v: '96' },
-            { id: 'am-2', k: 'Clinica Pro', v: '98' },
-            { id: 'am-3', k: 'Red de clinicas', v: '20' },
-          ].map((p) => (
-            <div key={p.id} className="rounded-lg bg-white/10 px-3 py-2">
-              <p className="tabular text-lg font-bold text-sidebar-foreground">{p.v}</p>
-              <p className="text-sidebar-foreground/70">{p.k}</p>
-            </div>
-          ))}
-        </div>
-      </MetricCard>
-      <MetricCard icon="UserGroupIcon" label="Doctores activos" value="587" delta="+21" deltaDirection="up" helper="promedio 2,7 por clinica" />
-      <MetricCard icon="IdentificationIcon" label="Personal administrativo" value="895" delta="+14" deltaDirection="up" helper="recepcion, auxiliares, contabilidad" />
-      <MetricCard className="md:col-span-1 xl:col-span-2" icon="ChartBarIcon" label="Pacientes atendidos (30 dias)" value="38 412" delta="+6,8 %" deltaDirection="up" tone="success" helper="vs. mes anterior" />
-      <MetricCard className="md:col-span-1 xl:col-span-2" icon="ExclamationTriangleIcon" label="Suscripciones en riesgo" value="11" unit="clinicas" delta="+4" deltaDirection="up" deltaGood={false} tone="alert" helper="pago vencido > 10 dias" />
+        tone="hero"
+        helper={loading ? 'Cargando…' : `${overview.clinics_active} activas · ${overview.clinics_trial} en prueba`}
+      />
+      <MetricCard
+        label="Pacientes totales"
+        value={v(overview.patients_total)}
+        icon="UserGroupIcon"
+        tone="success"
+        helper="Suma de todas las clínicas"
+      />
+      <MetricCard
+        label="Citas del mes"
+        value={v(overview.appointments_month)}
+        icon="CalendarDaysIcon"
+        tone="info"
+        helper="Mes en curso"
+      />
+      <MetricCard
+        label="Usuarios de plataforma"
+        value={v(overview.users_total)}
+        icon="UsersIcon"
+        tone="warning"
+        helper={loading ? '' : `${overview.clinics_suspended} clínicas suspendidas`}
+      />
     </section>
   );
 }
