@@ -1,7 +1,8 @@
 'use client';
-import React, { useState } from 'react';
+import React, { useCallback, useEffect, useState } from 'react';
 import Icon from '@/components/ui/AppIcon';
 import Toast from '@/components/ui/Toast';
+import { getSupabase } from '@/lib/supabase/client';
 
 type Perm = 'agenda' | 'clinica' | 'odonto' | 'finanzas' | 'rrhh' | 'inventario' | 'config';
 
@@ -24,47 +25,40 @@ interface Role {
   locked?: boolean;
 }
 
-const initialRoles: Role[] = [
-  {
-    id: 'role-admin',
-    name: 'Administrador de clinica',
-    description: 'Crea personal y asigna roles',
-    users: 231,
-    locked: true,
-    perms: { agenda: true, clinica: true, odonto: true, finanzas: true, rrhh: true, inventario: true, config: true },
-  },
-  {
-    id: 'role-doc',
-    name: 'Odontologo',
-    description: 'Atiende pacientes, odontograma y recetas',
-    users: 587,
-    perms: { agenda: true, clinica: true, odonto: true, finanzas: false, rrhh: false, inventario: true, config: false },
-  },
-  {
-    id: 'role-recep',
-    name: 'Recepcion',
-    description: 'Agenda, cobros y datos del paciente',
-    users: 342,
-    perms: { agenda: true, clinica: false, odonto: false, finanzas: true, rrhh: false, inventario: false, config: false },
-  },
-  {
-    id: 'role-aux',
-    name: 'Auxiliar odontologico',
-    description: 'Apoyo clinico e inventario',
-    users: 298,
-    perms: { agenda: true, clinica: false, odonto: false, finanzas: false, rrhh: false, inventario: true, config: false },
-  },
-  {
-    id: 'role-cont',
-    name: 'Contador',
-    description: 'Finanzas, rol de pagos y reportes',
-    users: 55,
-    perms: { agenda: false, clinica: false, odonto: false, finanzas: true, rrhh: true, inventario: false, config: false },
-  },
-];
-
 export default function RolesMatrix() {
-  const [roles, setRoles] = useState<Role[]>(initialRoles);
+  const [roles, setRoles] = useState<Role[]>([]);
+  const [loadError, setLoadError] = useState('');
+
+  const load = useCallback(async () => {
+    const sb = getSupabase();
+    const [{ data: rs, error: e1 }, { data: ps }] = await Promise.all([
+      sb.from('roles').select('key, name, description, perms, locked').order('locked', { ascending: false }).order('name'),
+      sb.from('profiles').select('role_key').eq('active', true).not('clinic_id', 'is', null),
+    ]);
+    if (e1 || !rs) {
+      setLoadError('No se pudieron cargar los roles.');
+      return;
+    }
+    const counts: Record<string, number> = {};
+    (ps || []).forEach((p: { role_key: string | null }) => {
+      if (p.role_key) counts[p.role_key] = (counts[p.role_key] || 0) + 1;
+    });
+    setLoadError('');
+    setRoles(
+      rs.map((r: { key: string; name: string; description: string; perms: Partial<Record<Perm, boolean>>; locked: boolean }) => ({
+        id: r.key,
+        name: r.name,
+        description: r.description,
+        users: counts[r.key] || 0,
+        locked: r.locked,
+        perms: { agenda: false, clinica: false, odonto: false, finanzas: false, rrhh: false, inventario: false, config: false, ...r.perms },
+      })),
+    );
+  }, []);
+
+  useEffect(() => {
+    void load();
+  }, [load]);
   const [dirty, setDirty] = useState(false);
   const [saving, setSaving] = useState(false);
   const [toast, setToast] = useState('');
@@ -76,13 +70,19 @@ export default function RolesMatrix() {
     setDirty(true);
   };
 
-  const save = () => {
+  const save = async () => {
     setSaving(true);
-    setTimeout(() => {
-      setSaving(false);
-      setDirty(false);
-      setToast('Matriz de roles guardada (plantilla UI)');
-    }, 600);
+    const sb = getSupabase();
+    const results = await Promise.all(
+      roles.filter((r) => !r.locked).map((r) => sb.from('roles').update({ perms: r.perms }).eq('key', r.id)),
+    );
+    setSaving(false);
+    if (results.some((x) => x.error)) {
+      setToast('No se pudieron guardar los roles.');
+      return;
+    }
+    setDirty(false);
+    setToast('Permisos de roles guardados.');
   };
 
   return (
@@ -90,7 +90,7 @@ export default function RolesMatrix() {
       <div className="flex flex-wrap items-center justify-between gap-3 border-b border-border px-5 py-4">
         <div>
           <h2 className="text-base font-semibold">Roles y permisos base</h2>
-          <p className="text-xs text-muted-foreground">Plantillas aplicadas a cada clinica</p>
+          <p className="text-xs text-muted-foreground">Referencia de permisos por rol, guardada en la base de datos</p>
         </div>
         <button
           type="button"
@@ -115,6 +115,11 @@ export default function RolesMatrix() {
             </tr>
           </thead>
           <tbody className="divide-y divide-border">
+            {loadError ? (
+              <tr>
+                <td colSpan={permissions.length + 2} className="px-5 py-6 text-center text-sm text-destructive">{loadError}</td>
+              </tr>
+            ) : null}
             {roles.map((r) => (
               <tr key={r.id} className="hover:bg-muted/40">
                 <td className="px-5 py-3">
