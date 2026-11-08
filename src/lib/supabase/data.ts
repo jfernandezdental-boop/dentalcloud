@@ -31,10 +31,11 @@ export async function listAppointments(opts?: {
 }) {
   const supabase = getSupabase();
   let q = supabase.from('appointments').select('*');
-  if (opts?.from) q = q.gte('starts_at', opts.from);
-  if (opts?.to) q = q.lte('starts_at', opts.to);
+  if (opts?.from) q = q.gte('date', opts.from);
+  if (opts?.to) q = q.lte('date', opts.to);
   const { data, error } = await q
-    .order('starts_at', { ascending: true })
+    .order('date', { ascending: true })
+    .order('start_time', { ascending: true })
     .limit(opts?.limit ?? 100);
   if (error) throw error;
   return data ?? [];

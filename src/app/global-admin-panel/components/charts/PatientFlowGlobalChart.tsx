@@ -2,17 +2,6 @@
 import React from 'react';
 import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, Legend } from 'recharts';
 
-const data = [
-  { id: 'w-1', sem: 'S1 sep', pacientes: 8420, nuevas: 3 },
-  { id: 'w-2', sem: 'S2 sep', pacientes: 9150, nuevas: 4 },
-  { id: 'w-3', sem: 'S3 sep', pacientes: 9310, nuevas: 2 },
-  { id: 'w-4', sem: 'S4 sep', pacientes: 8890, nuevas: 5 },
-  { id: 'w-5', sem: 'S1 oct', pacientes: 9760, nuevas: 6 },
-  { id: 'w-6', sem: 'S2 oct', pacientes: 10240, nuevas: 3 },
-  { id: 'w-7', sem: 'S3 oct', pacientes: 9120, nuevas: 4 },
-  { id: 'w-8', sem: 'S4 oct', pacientes: 9380, nuevas: 7 },
-];
-
 function GTooltip({ active, payload, label }: { active?: boolean; payload?: { value: number; name: string }[]; label?: string }) {
   if (!active || !payload?.length) return null;
   return (
@@ -27,13 +16,13 @@ function GTooltip({ active, payload, label }: { active?: boolean; payload?: { va
   );
 }
 
-export default function PatientFlowGlobalChart() {
+export default function PatientFlowGlobalChart({ data }: { data: { sem: string; atendidas: number; nuevas: number }[] }) {
   return (
     <div className="rounded-2xl border border-border bg-card p-5">
       <div className="mb-4 flex items-start justify-between">
         <div>
           <h3 className="text-base font-semibold">Flujo de pacientes en la red</h3>
-          <p className="text-xs text-muted-foreground">Pacientes atendidos por semana y altas de clinicas</p>
+          <p className="text-xs text-muted-foreground">Citas atendidas por semana (ultimas 8) y altas de clinicas</p>
         </div>
       </div>
       <div className="h-72">
@@ -45,7 +34,7 @@ export default function PatientFlowGlobalChart() {
             <YAxis yAxisId="right" orientation="right" tick={{ fontSize: 12, fill: 'var(--muted-foreground)' }} axisLine={false} tickLine={false} />
             <Tooltip content={<GTooltip />} />
             <Legend wrapperStyle={{ fontSize: 12 }} iconType="circle" />
-            <Line yAxisId="left" type="monotone" dataKey="pacientes" name="Pacientes atendidos" stroke="var(--primary)" strokeWidth={2.5} dot={{ r: 3 }} />
+            <Line yAxisId="left" type="monotone" dataKey="atendidas" name="Pacientes atendidos" stroke="var(--primary)" strokeWidth={2.5} dot={{ r: 3 }} />
             <Line yAxisId="right" type="monotone" dataKey="nuevas" name="Clinicas nuevas" stroke="var(--accent)" strokeWidth={2} strokeDasharray="5 4" dot={{ r: 3 }} />
           </LineChart>
         </ResponsiveContainer>
