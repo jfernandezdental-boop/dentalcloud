@@ -9,12 +9,13 @@ import AdminCharts from './components/AdminCharts';
 import ClinicsTable from './components/ClinicsTable';
 import RolesMatrix from './components/RolesMatrix';
 import UsersModule from './components/UsersModule';
-import SeedDemoButton from './components/SeedDemoButton';
 import { useAuth } from '@/components/AuthProvider';
+import { usePlatformOverview } from '@/lib/supabase/usePlatformOverview';
 
 export default function GlobalAdminPanelPage() {
   const { user, loading } = useAuth();
   const router = useRouter();
+  const overview = usePlatformOverview(!loading && user?.role === 'super_admin');
 
   useEffect(() => {
     if (loading) return;
@@ -40,11 +41,13 @@ export default function GlobalAdminPanelPage() {
       <div className="space-y-6">
         <AdminHeader />
         <div className="rounded-xl border border-amber-500/30 bg-amber-500/10 px-4 py-3 text-sm">
-          Panel de <strong>plataforma</strong>. Clinicas reales via Supabase; usuarios listados abajo son plantilla UI.
+          Panel de <strong>plataforma</strong>. Todos los datos de esta pantalla son reales y vienen de Supabase.
         </div>
-        <AdminMetrics />
-        <AdminCharts />
-        <SeedDemoButton />
+        {overview.error ? (
+          <div className="rounded-xl border border-destructive/30 bg-destructive/10 px-4 py-3 text-sm">{overview.error}</div>
+        ) : null}
+        <AdminMetrics data={overview.data} />
+        <AdminCharts data={overview.data} />
         <ClinicsTable />
         <div id="usuarios">
           <UsersModule />
