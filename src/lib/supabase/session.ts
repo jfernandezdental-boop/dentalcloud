@@ -72,13 +72,14 @@ export async function getSessionUser(): Promise<SessionUser | null> {
   if (!isSuper && profile.clinic_id) {
     clinicId = String(profile.clinic_id);
     // is_demo puede no existir aún: si falla el select, reintentamos sin esa columna
-    let clinic: {
+    type ClinicRow = {
       name?: string | null;
       city?: string | null;
       plan?: string | null;
       msp_code?: string | null;
       is_demo?: boolean | null;
-    } | null = null;
+    };
+    let clinic = null as ClinicRow | null;
 
     const full = await supabase
       .from('clinics')
@@ -92,9 +93,9 @@ export async function getSessionUser(): Promise<SessionUser | null> {
         .select('name, city, plan, msp_code')
         .eq('id', clinicId)
         .maybeSingle();
-      clinic = basic.data as typeof clinic;
+      clinic = basic.data as ClinicRow | null;
     } else {
-      clinic = full.data as typeof clinic;
+      clinic = full.data as ClinicRow | null;
     }
 
     if (clinic) {
