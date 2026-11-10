@@ -170,7 +170,7 @@ export default function RealAestheticsTab({ patientId }: { patientId: string }) 
           </div>
 
           <div className="grid gap-4 lg:grid-cols-2">
-            <FaceSelector view="front" selected={selectedZones} onToggle={toggleZone} />
+            <FaceSelector selected={selectedZones} onToggle={toggleZone} />
             <div className="space-y-2">
               <p className="text-sm font-semibold">Zonas y dosis ({unit})</p>
               {ZONES.map((z) => {
