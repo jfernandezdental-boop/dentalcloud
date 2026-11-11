@@ -16,9 +16,12 @@ export const ROUTE_ACCESS: Record<string, AppRole[]> = {
   '/': ['super_admin', 'admin', 'doctor', 'receptionist', 'staff'],
   '/doctor-agenda': ['super_admin', 'admin', 'doctor', 'receptionist'],
   '/patient-record': ['super_admin', 'admin', 'doctor', 'receptionist'],
+  '/proformas': ['super_admin', 'admin', 'doctor', 'receptionist'],
   '/interactive-odontogram': ['super_admin', 'admin', 'doctor'],
+  '/aesthetics': ['super_admin', 'admin', 'doctor', 'receptionist'],
   '/billing-statements': ['super_admin', 'admin', 'receptionist'],
   '/inventory-restock': ['super_admin', 'admin', 'staff'],
+  '/clinic-settings': ['super_admin', 'admin'],
   '/clinic-staff': ['super_admin', 'admin'],
   '/global-admin-panel': ['super_admin'],
   '/sign-up-login-screen': [
