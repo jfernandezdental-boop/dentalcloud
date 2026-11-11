@@ -1,7 +1,7 @@
 'use client';
 import React, { useState } from 'react';
-import { FACE_DIAGRAM_SRC } from '@/lib/faceDiagram';
 import { ZONES, type ZoneCode } from '@/lib/aesthetics';
+import { FACE_FRONT, FACE_LEFT, FACE_RIGHT } from '@/lib/faceAssets';
 
 type Props = {
   selected: ReadonlySet<ZoneCode>;
@@ -9,68 +9,58 @@ type Props = {
 };
 
 type ViewId = 'left' | 'front' | 'right';
+type Box = { left: number; top: number; w: number; h: number };
 
-const VIEWS: { id: ViewId; label: string; objectPos: string }[] = [
-  { id: 'left', label: 'Perfil izquierdo', objectPos: '12% center' },
-  { id: 'front', label: 'Frente', objectPos: '50% center' },
-  { id: 'right', label: 'Perfil derecho', objectPos: '88% center' },
+const VIEWS: { id: ViewId; label: string; src: string; width: number; height: number }[] = [
+  { id: 'left', label: 'Perfil izquierdo', src: FACE_LEFT, width: 488, height: 464 },
+  { id: 'front', label: 'Frente', src: FACE_FRONT, width: 447, height: 455 },
+  { id: 'right', label: 'Perfil derecho', src: FACE_RIGHT, width: 470, height: 466 },
 ];
 
-const HITS: Record<ViewId, Partial<Record<ZoneCode, { top: string; left: string; w: string; h: string }>>> = {
+const HITS: Record<ViewId, Partial<Record<ZoneCode, Box[]>>> = {
   front: {
-    frente: { top: '10%', left: '28%', w: '44%', h: '12%' },
-    glabela: { top: '22%', left: '42%', w: '16%', h: '8%' },
-    patas_gallo: { top: '28%', left: '18%', w: '14%', h: '12%' },
-    lineas_nasales: { top: '38%', left: '36%', w: '28%', h: '10%' },
-    labio_superior: { top: '52%', left: '38%', w: '24%', h: '8%' },
-    menton: { top: '64%', left: '38%', w: '24%', h: '10%' },
-    maseteros: { top: '42%', left: '12%', w: '16%', h: '18%' },
-    platisma: { top: '78%', left: '30%', w: '40%', h: '12%' },
+    frente: [{ left: 28, top: 9, w: 44, h: 13 }],
+    glabela: [{ left: 44, top: 23, w: 12, h: 14 }],
+    patas_gallo: [
+      { left: 17, top: 32, w: 11, h: 16 },
+      { left: 72, top: 32, w: 11, h: 16 },
+    ],
+    lineas_nasales: [
+      { left: 39, top: 40, w: 10, h: 12 },
+      { left: 51, top: 40, w: 10, h: 12 },
+    ],
+    labio_superior: [{ left: 41, top: 60.5, w: 18, h: 8 }],
+    menton: [{ left: 39, top: 75, w: 22, h: 11 }],
+    maseteros: [
+      { left: 22, top: 58, w: 13, h: 17 },
+      { left: 65, top: 58, w: 13, h: 17 },
+    ],
+    platisma: [{ left: 36, top: 87, w: 28, h: 11 }],
   },
   left: {
-    frente: { top: '12%', left: '40%', w: '36%', h: '14%' },
-    glabela: { top: '26%', left: '55%', w: '18%', h: '8%' },
-    patas_gallo: { top: '30%', left: '48%', w: '16%', h: '12%' },
-    labio_superior: { top: '50%', left: '58%', w: '20%', h: '8%' },
-    menton: { top: '62%', left: '52%', w: '22%', h: '10%' },
-    maseteros: { top: '40%', left: '30%', w: '22%', h: '18%' },
-    platisma: { top: '78%', left: '32%', w: '40%', h: '12%' },
+    frente: [{ left: 55, top: 11, w: 22, h: 16 }],
+    glabela: [{ left: 72, top: 31, w: 12, h: 12 }],
+    patas_gallo: [{ left: 56, top: 32, w: 12, h: 15 }],
+    lineas_nasales: [{ left: 78, top: 42, w: 9, h: 12 }],
+    labio_superior: [{ left: 77, top: 64.5, w: 11, h: 7 }],
+    menton: [{ left: 69, top: 79, w: 14, h: 11 }],
+    maseteros: [{ left: 42, top: 54, w: 18, h: 22 }],
+    platisma: [{ left: 50, top: 87, w: 20, h: 11 }],
   },
   right: {
-    frente: { top: '12%', left: '24%', w: '36%', h: '14%' },
-    glabela: { top: '26%', left: '28%', w: '18%', h: '8%' },
-    patas_gallo: { top: '30%', left: '36%', w: '16%', h: '12%' },
-    labio_superior: { top: '50%', left: '22%', w: '20%', h: '8%' },
-    menton: { top: '62%', left: '26%', w: '22%', h: '10%' },
-    maseteros: { top: '40%', left: '48%', w: '22%', h: '18%' },
-    platisma: { top: '78%', left: '28%', w: '40%', h: '12%' },
+    frente: [{ left: 24, top: 11, w: 22, h: 16 }],
+    glabela: [{ left: 16, top: 32, w: 11, h: 11 }],
+    patas_gallo: [{ left: 33, top: 32, w: 11, h: 15 }],
+    lineas_nasales: [{ left: 14, top: 42, w: 9, h: 12 }],
+    labio_superior: [{ left: 13, top: 64.5, w: 11, h: 7 }],
+    menton: [{ left: 18, top: 79, w: 14, h: 11 }],
+    maseteros: [{ left: 38, top: 54, w: 18, h: 22 }],
+    platisma: [{ left: 30, top: 87, w: 20, h: 11 }],
   },
 };
 
-function SvgFallback({ view }: { view: ViewId }) {
-  if (view === 'front') {
-    return (
-      <svg viewBox="0 0 100 120" className="h-full w-full" fill="none" stroke="#1a1a1a" strokeWidth="1.1">
-        <path d="M32 28 C34 10 66 10 68 28 C74 42 74 70 68 88 C62 104 54 112 50 114 C46 112 38 104 32 88 C26 70 26 42 32 28Z" />
-        <path d="M38 34 C42 30 58 30 62 34" /><path d="M36 40 Q44 46 48 40" /><path d="M52 40 Q56 46 64 40" />
-        <path d="M50 44 L48 56 Q50 60 52 56Z" /><path d="M44 70 Q50 76 56 70" /><path d="M46 74 Q50 78 54 74" />
-      </svg>
-    );
-  }
-  const flip = view === 'right';
-  return (
-    <svg viewBox="0 0 100 120" className="h-full w-full" fill="none" stroke="#1a1a1a" strokeWidth="1.1">
-      <g transform={flip ? 'translate(100,0) scale(-1,1)' : undefined}>
-        <path d="M28 32 C32 12 52 8 62 24 C74 36 82 48 80 60 C78 74 68 86 58 96 L48 110 L40 96 C34 80 26 64 28 48Z" />
-        <path d="M58 42 Q66 46 68 52" /><path d="M70 58 Q78 62 74 68" /><path d="M64 72 Q72 76 68 80" />
-      </g>
-    </svg>
-  );
-}
-
 export default function FaceSelector({ selected, onToggle }: Props) {
   const [view, setView] = useState<ViewId>('front');
-  const [imgOk, setImgOk] = useState(true);
   const current = VIEWS.find((v) => v.id === view)!;
   const hits = HITS[view];
 
@@ -91,49 +81,42 @@ export default function FaceSelector({ selected, onToggle }: Props) {
         ))}
       </div>
 
-      <div className="relative mx-auto aspect-[3/4] w-full max-w-[300px] overflow-hidden rounded-2xl border border-border bg-white">
-        {imgOk ? (
-          <img
-            src={FACE_DIAGRAM_SRC}
-            alt={current.label}
-            className="pointer-events-none absolute inset-0 h-full w-full select-none object-cover"
-            style={{ objectPosition: current.objectPos }}
-            draggable={false}
-            onError={() => setImgOk(false)}
-          />
-        ) : (
-          <div className="absolute inset-0 p-3">
-            <SvgFallback view={view} />
-          </div>
-        )}
+      <div
+        className="relative mx-auto w-full max-w-[320px] overflow-hidden rounded-2xl border border-border bg-white"
+        style={{ aspectRatio: `${current.width} / ${current.height}` }}
+      >
+        {/* eslint-disable-next-line @next/next/no-img-element */}
+        <img
+          src={current.src}
+          alt={current.label}
+          className="pointer-events-none absolute inset-0 h-full w-full select-none object-contain"
+          draggable={false}
+        />
 
-        {(Object.entries(hits) as [ZoneCode, { top: string; left: string; w: string; h: string }][]).map(
-          ([code, h]) => {
-            const active = selected.has(code);
-            const label = ZONES.find((z) => z.code === code)?.label ?? code;
-            return (
-              <button
-                key={code}
-                type="button"
-                title={label}
-                aria-label={label}
-                aria-pressed={active}
-                onClick={() => onToggle(code)}
-                className={`absolute rounded-full border-2 transition-all ${
-                  active
-                    ? 'border-teal-600 bg-teal-500/45 shadow-md'
-                    : 'border-transparent bg-slate-400/10 hover:border-teal-400/50 hover:bg-teal-400/20'
-                }`}
-                style={{ top: h.top, left: h.left, width: h.w, height: h.h }}
-              />
-            );
-          },
-        )}
-
-        <p className="pointer-events-none absolute bottom-2 left-0 right-0 text-center text-[10px] font-bold uppercase tracking-wider text-slate-600">
-          {current.label}
-        </p>
+        {(Object.entries(hits) as [ZoneCode, Box[]][]).flatMap(([code, boxes]) => {
+          const active = selected.has(code);
+          const label = ZONES.find((z) => z.code === code)?.label ?? code;
+          return boxes.map((b, i) => (
+            <button
+              key={`${code}-${i}`}
+              type="button"
+              title={label}
+              aria-label={label}
+              aria-pressed={active}
+              onClick={() => onToggle(code)}
+              className={`absolute rounded-full border-2 transition-all focus-visible:outline focus-visible:outline-2 focus-visible:outline-teal-600 ${
+                active
+                  ? 'border-teal-600 bg-teal-500/45 shadow-md'
+                  : 'border-transparent bg-slate-400/10 hover:border-teal-400/60 hover:bg-teal-400/20'
+              }`}
+              style={{ left: `${b.left}%`, top: `${b.top}%`, width: `${b.w}%`, height: `${b.h}%` }}
+            />
+          ));
+        })}
       </div>
+      <p className="mt-1 text-center text-[11px] font-semibold uppercase tracking-wider text-muted-foreground">
+        {current.label}
+      </p>
 
       <ul className="mt-3 flex flex-wrap gap-1.5">
         {ZONES.map((z) => (
@@ -141,6 +124,7 @@ export default function FaceSelector({ selected, onToggle }: Props) {
             <button
               type="button"
               onClick={() => onToggle(z.code)}
+              aria-pressed={selected.has(z.code)}
               className={`rounded-full border px-2 py-0.5 text-xs font-semibold transition-colors ${
                 selected.has(z.code)
                   ? 'border-primary bg-primary/10 text-primary'
