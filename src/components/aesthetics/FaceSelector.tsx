@@ -1,7 +1,6 @@
 'use client';
 import React, { useState } from 'react';
 import { ZONES, type ZoneCode } from '@/lib/aesthetics';
-import { FACE_FRONT, FACE_LEFT, FACE_RIGHT } from '@/lib/faceAssets';
 
 type Props = {
   selected: ReadonlySet<ZoneCode>;
@@ -12,9 +11,9 @@ type ViewId = 'left' | 'front' | 'right';
 type Box = { left: number; top: number; w: number; h: number };
 
 const VIEWS: { id: ViewId; label: string; src: string; width: number; height: number }[] = [
-  { id: 'left', label: 'Perfil izquierdo', src: FACE_LEFT, width: 488, height: 464 },
-  { id: 'front', label: 'Frente', src: FACE_FRONT, width: 447, height: 455 },
-  { id: 'right', label: 'Perfil derecho', src: FACE_RIGHT, width: 470, height: 466 },
+  { id: 'left', label: 'Perfil izquierdo', src: '/aesthetics/face-left.png', width: 488, height: 464 },
+  { id: 'front', label: 'Frente', src: '/aesthetics/face-front.png', width: 447, height: 455 },
+  { id: 'right', label: 'Perfil derecho', src: '/aesthetics/face-right.png', width: 470, height: 466 },
 ];
 
 const HITS: Record<ViewId, Partial<Record<ZoneCode, Box[]>>> = {
@@ -61,6 +60,7 @@ const HITS: Record<ViewId, Partial<Record<ZoneCode, Box[]>>> = {
 
 export default function FaceSelector({ selected, onToggle }: Props) {
   const [view, setView] = useState<ViewId>('front');
+  const [imgOk, setImgOk] = useState(true);
   const current = VIEWS.find((v) => v.id === view)!;
   const hits = HITS[view];
 
@@ -71,7 +71,10 @@ export default function FaceSelector({ selected, onToggle }: Props) {
           <button
             key={v.id}
             type="button"
-            onClick={() => setView(v.id)}
+            onClick={() => {
+              setView(v.id);
+              setImgOk(true);
+            }}
             className={`flex-1 rounded-md px-2 py-1.5 text-xs font-semibold transition-colors ${
               view === v.id ? 'bg-card text-foreground shadow-sm' : 'text-muted-foreground hover:text-foreground'
             }`}
@@ -85,13 +88,20 @@ export default function FaceSelector({ selected, onToggle }: Props) {
         className="relative mx-auto w-full max-w-[320px] overflow-hidden rounded-2xl border border-border bg-white"
         style={{ aspectRatio: `${current.width} / ${current.height}` }}
       >
-        {/* eslint-disable-next-line @next/next/no-img-element */}
-        <img
-          src={current.src}
-          alt={current.label}
-          className="pointer-events-none absolute inset-0 h-full w-full select-none object-contain"
-          draggable={false}
-        />
+        {imgOk ? (
+          // eslint-disable-next-line @next/next/no-img-element
+          <img
+            src={current.src}
+            alt={current.label}
+            className="pointer-events-none absolute inset-0 h-full w-full select-none object-contain"
+            draggable={false}
+            onError={() => setImgOk(false)}
+          />
+        ) : (
+          <p className="absolute inset-0 grid place-items-center p-4 text-center text-sm text-muted-foreground">
+            Falta {current.src}. Sube las PNG a public/aesthetics/.
+          </p>
+        )}
 
         {(Object.entries(hits) as [ZoneCode, Box[]][]).flatMap(([code, boxes]) => {
           const active = selected.has(code);
