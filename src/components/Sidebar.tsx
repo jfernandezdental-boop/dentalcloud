@@ -21,6 +21,7 @@ const baseItems: NavItem[] = [
   { id: 'nav-patient', label: 'Ficha del paciente', href: '/patient-record', icon: 'UserCircleIcon' },
   { id: 'nav-proformas', label: 'Proformas', href: '/proformas', icon: 'DocumentTextIcon' },
   { id: 'nav-odontogram', label: 'Odontograma', href: '/interactive-odontogram', icon: 'PuzzlePieceIcon' },
+  { id: 'nav-aesthetics', label: 'Estética facial', href: '/aesthetics', icon: 'SparklesIcon' },
   { id: 'nav-billing', label: 'Facturacion', href: '/billing-statements', icon: 'ReceiptPercentIcon' },
   { id: 'nav-inventory', label: 'Inventario', href: '/inventory-restock', icon: 'CubeIcon' },
   { id: 'nav-settings', label: 'Configuracion', href: '/clinic-settings', icon: 'Cog6ToothIcon' },
@@ -58,42 +59,45 @@ export default function Sidebar({ collapsed, onToggle, mobileOpen, onCloseMobile
       <aside
         className={`fixed inset-y-0 left-0 z-40 flex flex-col bg-sidebar text-sidebar-foreground transition-all duration-300 ease-in-out ${
           collapsed ? 'lg:w-16' : 'lg:w-60'
-        } w-60 ${mobileOpen ? 'translate-x-0' : '-translate-x-full'} lg:translate-x-0`}
+        } w-60 ${mobileOpen ? 'translate-x-0' : '-translate-x-full lg:translate-x-0'}`}
       >
-        <div className={`flex h-16 items-center border-b border-white/10 ${collapsed ? 'lg:justify-center lg:px-0 px-4' : 'px-4'} gap-2`}>
-          <AppLogo size={36} />
-          <span className={`text-lg font-bold tracking-tight ${collapsed ? 'lg:hidden' : ''}`}>DentalCloud</span>
+        <div className={`flex items-center gap-3 border-b border-white/10 px-4 py-4 ${collapsed ? 'lg:justify-center lg:px-2' : ''}`}>
+          <AppLogo size={36} className="shrink-0" />
+          <div className={`min-w-0 ${collapsed ? 'lg:hidden' : ''}`}>
+            <p className="truncate text-sm font-bold tracking-tight">DentalCloud</p>
+          </div>
+          <button type="button" onClick={onCloseMobile} className="ml-auto rounded-md p-1.5 lg:hidden" aria-label="Cerrar menu">
+            <Icon name="XMarkIcon" size={20} />
+          </button>
         </div>
 
-        <div className={`border-b border-white/10 p-3 ${collapsed ? 'lg:hidden' : ''}`}>
-          <div className="flex w-full items-center gap-2 rounded-lg bg-white/5 px-3 py-2 text-left">
-            <span className="flex h-8 w-8 items-center justify-center rounded-md bg-primary text-xs font-bold text-primary-foreground">
+        <div className={`border-b border-white/10 px-3 py-3 ${collapsed ? 'lg:px-2' : ''}`}>
+          <div className={`flex items-center gap-3 rounded-xl bg-white/10 p-2.5 ${collapsed ? 'lg:justify-center' : ''}`}>
+            <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-primary text-xs font-bold text-primary-foreground">
               {initials(clinicName)}
             </span>
-            <span className="min-w-0 flex-1">
-              <span className="block truncate text-sm font-semibold">{clinicName}</span>
-              <span className="block truncate text-[11px] text-sidebar-foreground/70">{clinicSub || 'Clinica'}</span>
-            </span>
+            <div className={`min-w-0 ${collapsed ? 'lg:hidden' : ''}`}>
+              <p className="truncate text-sm font-semibold">{clinicName}</p>
+              {clinicSub ? <p className="truncate text-[11px] text-sidebar-foreground/70">{clinicSub}</p> : null}
+            </div>
           </div>
         </div>
 
-        <nav className="flex-1 space-y-5 overflow-y-auto px-2 py-4 scrollbar-thin">
-          <div>
-            <p
-              className={`mb-1.5 px-3 text-[10px] font-semibold uppercase tracking-widest text-sidebar-foreground/50 ${
-                collapsed ? 'lg:hidden' : ''
-              }`}
-            >
-              Operacion clinica
-            </p>
-            <ul className="space-y-1">
+        <nav className="flex-1 overflow-y-auto px-2 py-3">
+          <div className={collapsed ? 'lg:px-0' : 'px-1'}>
+            {!collapsed && (
+              <p className="mb-2 px-2 text-[10px] font-semibold uppercase tracking-wider text-sidebar-foreground/50">
+                Operacion clinica
+              </p>
+            )}
+            <ul className="space-y-0.5">
               {items.map((item) => {
-                const active = pathname === item.href;
+                const active = pathname === item.href || (item.href !== '/' && pathname.startsWith(item.href));
                 const link = (
                   <Link
                     href={item.href}
                     onClick={onCloseMobile}
-                    className={`relative flex items-center gap-3 rounded-lg px-3 py-2.5 text-sm font-medium transition-all duration-150 ${
+                    className={`flex items-center gap-3 rounded-lg px-3 py-2.5 text-sm font-medium transition-colors ${
                       active
                         ? 'bg-primary text-primary-foreground shadow'
                         : 'text-sidebar-foreground/80 hover:bg-white/10 hover:text-sidebar-foreground'
