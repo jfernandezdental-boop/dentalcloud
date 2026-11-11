@@ -11,6 +11,24 @@ import { listPatients } from '@/lib/supabase/data';
 import { getSupabase, hasSupabaseEnv } from '@/lib/supabase/client';
 import { useAuth } from '@/components/AuthProvider';
 
+function ageFromBirth(birth: string): string | null {
+  if (!birth || birth.length < 8) return null;
+  const d = new Date(birth);
+  if (Number.isNaN(d.getTime())) return null;
+  const now = new Date();
+  let age = now.getFullYear() - d.getFullYear();
+  const m = now.getMonth() - d.getMonth();
+  if (m < 0 || (m === 0 && now.getDate() < d.getDate())) age -= 1;
+  return age >= 0 && age < 130 ? `${age} años` : null;
+}
+
+function fmtDate(iso: string): string {
+  if (!iso || iso.length < 8) return '—';
+  const [y, m, d] = iso.slice(0, 10).split('-');
+  if (!y || !m || !d) return iso;
+  return `${d}/${m}/${y}`;
+}
+
 function mapPatient(row: Record<string, unknown>): PatientListItem {
   const first =
     String(row.first_name || row.nombres || '') ||
@@ -99,11 +117,11 @@ export default function PatientRecordWorkspace() {
       setOpenNew(false);
       return;
     }
-    const fullName = `${p.firstName.trim()} ${p.lastName.trim()}`.trim();
     if (!user?.clinicId) {
       setToast('No hay una clinica activa en tu sesion. Cierra sesion y vuelve a entrar.');
       return;
     }
+    const fullName = `${p.firstName.trim()} ${p.lastName.trim()}`.trim();
     const payload: Record<string, unknown> = {
       clinic_id: user.clinicId,
       first_name: p.firstName.trim(),
@@ -127,9 +145,7 @@ export default function PatientRecordWorkspace() {
     setOpenNew(false);
     setToast(`Paciente ${fullName} registrado`);
     await load();
-    if (data && (data as { id?: string }).id) {
-      setSelectedId(String((data as { id: string }).id));
-    }
+    if (data && (data as { id?: string }).id) setSelectedId(String((data as { id: string }).id));
   };
 
   const handleProfileSaved = async (values: Record<string, string>) => {
@@ -193,14 +209,21 @@ export default function PatientRecordWorkspace() {
                   <div className="flex flex-wrap items-center gap-2">
                     <h1 className="text-2xl font-semibold">{selected.fullName}</h1>
                     <Badge tone="success" dot>
-                      Seleccionado
+                      Paciente activa
                     </Badge>
                     {selected.allergies && selected.allergies.toLowerCase() !== 'ninguna' ? (
                       <Badge tone="warning">Alergia: {selected.allergies}</Badge>
                     ) : null}
                   </div>
                   <p className="mt-1 text-sm text-muted-foreground">
-                    C.I. {selected.document || '—'} · {selected.sex || '—'} · {selected.insurance || '—'}
+                    {[
+                      selected.document ? `C.I. ${selected.document}` : null,
+                      ageFromBirth(selected.birth),
+                      selected.sex || null,
+                      selected.insurance || null,
+                    ]
+                      .filter(Boolean)
+                      .join(' · ') || 'Sin datos de identificación'}
                   </p>
                   <dl className="mt-3 grid grid-cols-2 gap-x-6 gap-y-2 text-sm sm:grid-cols-4">
                     <div>
@@ -217,7 +240,7 @@ export default function PatientRecordWorkspace() {
                     </div>
                     <div>
                       <dt className="text-xs text-muted-foreground">Nacimiento</dt>
-                      <dd className="font-semibold">{selected.birth || '—'}</dd>
+                      <dd className="font-semibold">{selected.birth ? fmtDate(selected.birth) : '—'}</dd>
                     </div>
                   </dl>
                 </>
