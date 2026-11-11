@@ -1,59 +1,73 @@
 'use client';
-import React, { useEffect, useMemo, useState } from 'react';
+import React, { useCallback, useEffect, useMemo, useState } from 'react';
 import Icon from '@/components/ui/AppIcon';
 import { useAuth } from '@/components/AuthProvider';
-import { getSupabase } from '@/lib/supabase/client';
+import { listPatients } from '@/lib/supabase/data';
+import { hasSupabaseEnv } from '@/lib/supabase/client';
 import RealAestheticsTab from '@/app/patient-record/components/tabs/RealAestheticsTab';
 
 type PatientOpt = { id: string; label: string };
 
-function patientLabel(p: Record<string, unknown>): string {
-  const full =
-    (p.full_name as string) ||
-    [p.first_name, p.last_name].filter(Boolean).join(' ') ||
-    (p.name as string) ||
+function mapPatientLabel(row: Record<string, unknown>): PatientOpt {
+  const first =
+    String(row.first_name || row.nombres || '') ||
+    String(row.full_name || row.name || '')
+      .split(' ')
+      .slice(0, -1)
+      .join(' ');
+  const last =
+    String(row.last_name || row.apellidos || '') ||
+    String(row.full_name || row.name || '')
+      .split(' ')
+      .slice(-1)
+      .join(' ');
+  const fullName =
+    String(row.full_name || row.name || '').trim() ||
+    [first, last].filter(Boolean).join(' ') ||
     'Paciente';
-  const doc = (p.cedula as string) || (p.document as string) || '';
-  return doc ? `${full} · ${doc}` : full;
+  const doc = String(row.cedula || row.document || row.national_id || row.rut || '');
+  return {
+    id: String(row.id),
+    label: doc ? `${fullName} · ${doc}` : fullName,
+  };
 }
 
 export default function AestheticsWorkspace() {
-  const { user } = useAuth();
+  const { user, loading: authLoading } = useAuth();
   const [patients, setPatients] = useState<PatientOpt[]>([]);
   const [patientId, setPatientId] = useState('');
   const [query, setQuery] = useState('');
   const [loading, setLoading] = useState(true);
+  const [error, setError] = useState('');
 
-  useEffect(() => {
-    let alive = true;
-    (async () => {
-      if (!user?.clinicId) {
-        setLoading(false);
+  const load = useCallback(async () => {
+    setLoading(true);
+    setError('');
+    try {
+      if (!hasSupabaseEnv()) {
+        setPatients([]);
+        setError('Supabase no está configurado en este entorno.');
         return;
       }
-      setLoading(true);
-      const { data, error } = await getSupabase()
-        .from('patients')
-        .select('id, first_name, last_name, full_name, cedula, document')
-        .order('created_at', { ascending: false })
-        .limit(300);
-      if (!alive) return;
-      if (error) {
+      if (!user?.clinicId && user?.role !== 'super_admin') {
         setPatients([]);
-      } else {
-        setPatients(
-          ((data as Record<string, unknown>[]) || []).map((p) => ({
-            id: String(p.id),
-            label: patientLabel(p),
-          })),
-        );
+        setError('No hay una clínica activa en tu sesión. Cierra sesión y vuelve a entrar.');
+        return;
       }
+      const rows = (await listPatients(300)) as Record<string, unknown>[];
+      setPatients(rows.map(mapPatientLabel));
+    } catch (e) {
+      setPatients([]);
+      setError(e instanceof Error ? e.message : 'No se pudieron cargar los pacientes.');
+    } finally {
       setLoading(false);
-    })();
-    return () => {
-      alive = false;
-    };
-  }, [user?.clinicId]);
+    }
+  }, [user?.clinicId, user?.role]);
+
+  useEffect(() => {
+    if (authLoading) return;
+    void load();
+  }, [authLoading, load]);
 
   const filtered = useMemo(() => {
     const q = query.trim().toLowerCase();
@@ -78,28 +92,65 @@ export default function AestheticsWorkspace() {
         <label className="mb-2 block text-sm font-semibold">Paciente</label>
         <div className="flex flex-col gap-2 sm:flex-row">
           <div className="relative flex-1">
-            <Icon name="MagnifyingGlassIcon" size={16} className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground" />
+            <Icon
+              name="MagnifyingGlassIcon"
+              size={16}
+              className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground"
+            />
             <input
               className="h-10 w-full rounded-lg border border-input bg-background pl-9 pr-3 text-sm"
               placeholder="Buscar por nombre o cédula…"
               value={query}
               onChange={(e) => setQuery(e.target.value)}
+              disabled={loading || !!error}
             />
           </div>
           <select
-            className="h-10 min-w-[240px] rounded-lg border border-input bg-background px-3 text-sm"
+            className="h-10 min-w-[260px] rounded-lg border border-input bg-background px-3 text-sm"
             value={patientId}
             onChange={(e) => setPatientId(e.target.value)}
-            disabled={loading}
+            disabled={loading || patients.length === 0}
           >
-            <option value="">{loading ? 'Cargando…' : 'Selecciona un paciente'}</option>
+            <option value="">
+              {loading
+                ? 'Cargando pacientes…'
+                : patients.length === 0
+                  ? 'Sin pacientes'
+                  : `Selecciona un paciente (${filtered.length})`}
+            </option>
             {filtered.map((p) => (
               <option key={p.id} value={p.id}>
                 {p.label}
               </option>
             ))}
           </select>
+          <button
+            type="button"
+            className="h-10 shrink-0 rounded-lg border border-input px-3 text-sm font-semibold hover:bg-muted"
+            onClick={() => void load()}
+            disabled={loading}
+            title="Recargar lista"
+          >
+            <Icon name="ArrowPathIcon" size={16} />
+          </button>
         </div>
+
+        {error ? (
+          <p className="mt-2 text-sm text-destructive" role="alert">
+            {error}
+          </p>
+        ) : null}
+
+        {!loading && !error && patients.length === 0 ? (
+          <p className="mt-2 text-sm text-muted-foreground">
+            No hay pacientes en esta clínica. Créalos primero en{' '}
+            <a href="/patient-record" className="font-semibold text-primary underline">
+              Ficha del paciente
+            </a>
+            .
+          </p>
+        ) : null}
+
         {selected ? (
           <p className="mt-2 text-xs text-muted-foreground">
             Trabajando con <span className="font-semibold text-foreground">{selected.label}</span>
