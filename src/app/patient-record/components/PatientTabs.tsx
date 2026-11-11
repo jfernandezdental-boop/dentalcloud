@@ -13,6 +13,7 @@ import RealPaymentsTab from './tabs/RealPaymentsTab';
 import RealClinicalHistoryTab from './tabs/RealClinicalHistoryTab';
 import RealPrescriptionsTab from './tabs/RealPrescriptionsTab';
 import RealHistoryTab from './tabs/RealHistoryTab';
+import RealAestheticsTab from './tabs/RealAestheticsTab';
 import EmptyState from '@/components/ui/EmptyState';
 import { useAuth } from '@/components/AuthProvider';
 import type { PatientListItem } from './PatientListPanel';
@@ -24,6 +25,7 @@ const tabs = [
   { id: 'pt-bud', key: 'bud', label: 'Presupuestos', icon: 'DocumentTextIcon' },
   { id: 'pt-rx', key: 'rx', label: 'Recetario', icon: 'BeakerIcon' },
   { id: 'pt-img', key: 'img', label: 'Radiografias', icon: 'PhotoIcon' },
+  { id: 'pt-aes', key: 'aes', label: 'Estética facial', icon: 'SparklesIcon' },
   { id: 'pt-pay', key: 'pay', label: 'Pagos', icon: 'BanknotesIcon' },
 ] as const;
 
@@ -73,6 +75,7 @@ export default function PatientTabs({
         {active === 'bud' && (demo ? <BudgetsTab /> : <RealBudgetsTab patientId={patient.id} />)}
         {active === 'rx' && (demo ? <PrescriptionsTab /> : <RealPrescriptionsTab patientId={patient.id} />)}
         {active === 'img' && (demo ? <XraysTab /> : pending('Radiografías'))}
+        {active === 'aes' && <RealAestheticsTab patientId={patient.id} />}
         {active === 'pay' && (demo ? <PaymentsTab /> : <RealPaymentsTab patientId={patient.id} />)}
       </div>
     </section>
