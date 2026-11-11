@@ -3,33 +3,39 @@ import React, { useCallback, useEffect, useMemo, useState } from 'react';
 import Icon from '@/components/ui/AppIcon';
 import { useAuth } from '@/components/AuthProvider';
 import { listPatients } from '@/lib/supabase/data';
-import { hasSupabaseEnv } from '@/lib/supabase/client';
+import { getSupabase, hasSupabaseEnv } from '@/lib/supabase/client';
 import RealAestheticsTab from '@/app/patient-record/components/tabs/RealAestheticsTab';
 
-type PatientOpt = { id: string; label: string };
+type PatientOpt = {
+  id: string;
+  fullName: string;
+  document: string;
+  label: string;
+};
 
-function mapPatientLabel(row: Record<string, unknown>): PatientOpt {
-  const first =
-    String(row.first_name || row.nombres || '') ||
-    String(row.full_name || row.name || '')
-      .split(' ')
-      .slice(0, -1)
-      .join(' ');
-  const last =
-    String(row.last_name || row.apellidos || '') ||
-    String(row.full_name || row.name || '')
-      .split(' ')
-      .slice(-1)
-      .join(' ');
+function mapRow(row: Record<string, unknown>): PatientOpt {
+  const first = String(row.first_name || row.nombres || '').trim();
+  const last = String(row.last_name || row.apellidos || '').trim();
   const fullName =
     String(row.full_name || row.name || '').trim() ||
     [first, last].filter(Boolean).join(' ') ||
     'Paciente';
-  const doc = String(row.cedula || row.document || row.national_id || row.rut || '');
+  const document = String(row.cedula || row.document || row.national_id || row.rut || '');
   return {
     id: String(row.id),
-    label: doc ? `${fullName} · ${doc}` : fullName,
+    fullName,
+    document,
+    label: document ? `${fullName} · ${document}` : fullName,
   };
+}
+
+function initials(name: string) {
+  return name
+    .split(/\s+/)
+    .filter(Boolean)
+    .slice(0, 2)
+    .map((w) => w[0]?.toUpperCase() || '')
+    .join('') || '?';
 }
 
 export default function AestheticsWorkspace() {
@@ -46,23 +52,40 @@ export default function AestheticsWorkspace() {
     try {
       if (!hasSupabaseEnv()) {
         setPatients([]);
-        setError('Supabase no está configurado en este entorno.');
+        setError('Supabase no está configurado.');
         return;
       }
-      if (!user?.clinicId && user?.role !== 'super_admin') {
-        setPatients([]);
-        setError('No hay una clínica activa en tu sesión. Cierra sesión y vuelve a entrar.');
-        return;
+
+      // 1) Misma vía que Ficha del paciente
+      try {
+        const rows = (await listPatients(300)) as Record<string, unknown>[];
+        if (rows?.length) {
+          setPatients(rows.map(mapRow));
+          return;
+        }
+      } catch {
+        /* fallback abajo */
       }
-      const rows = (await listPatients(300)) as Record<string, unknown>[];
-      setPatients(rows.map(mapPatientLabel));
+
+      // 2) Fallback: select directo (RLS filtra por clínica)
+      let q = getSupabase()
+        .from('patients')
+        .select('id, first_name, last_name, full_name, name, nombres, apellidos, cedula, document')
+        .order('created_at', { ascending: false })
+        .limit(300);
+      if (user?.clinicId) {
+        q = q.eq('clinic_id', user.clinicId);
+      }
+      const { data, error: e } = await q;
+      if (e) throw e;
+      setPatients(((data as Record<string, unknown>[]) || []).map(mapRow));
     } catch (e) {
       setPatients([]);
-      setError(e instanceof Error ? e.message : 'No se pudieron cargar los pacientes.');
+      setError(e instanceof Error ? e.message : 'No se pudieron cargar los pacientes');
     } finally {
       setLoading(false);
     }
-  }, [user?.clinicId, user?.role]);
+  }, [user?.clinicId]);
 
   useEffect(() => {
     if (authLoading) return;
@@ -72,103 +95,135 @@ export default function AestheticsWorkspace() {
   const filtered = useMemo(() => {
     const q = query.trim().toLowerCase();
     if (!q) return patients;
-    return patients.filter((p) => p.label.toLowerCase().includes(q));
+    return patients.filter(
+      (p) =>
+        p.fullName.toLowerCase().includes(q) ||
+        p.document.toLowerCase().includes(q) ||
+        p.label.toLowerCase().includes(q),
+    );
   }, [patients, query]);
 
-  const selected = patients.find((p) => p.id === patientId);
+  const selected = patients.find((p) => p.id === patientId) || null;
 
   return (
     <div className="space-y-6">
-      <div className="flex flex-col gap-3 sm:flex-row sm:items-end sm:justify-between">
-        <div>
-          <h1 className="text-2xl font-bold tracking-tight">Estética facial</h1>
-          <p className="text-sm text-muted-foreground">
-            Sesiones de toxina, rellenos y otros procedimientos · mapa de zonas y seguridad
-          </p>
-        </div>
+      <div>
+        <h1 className="text-2xl font-bold tracking-tight">Estética facial</h1>
+        <p className="text-sm text-muted-foreground">
+          Sesiones de toxina, rellenos y otros procedimientos · mapa de zonas y seguridad
+        </p>
       </div>
 
-      <div className="rounded-2xl border border-border bg-card p-4">
-        <label className="mb-2 block text-sm font-semibold">Paciente</label>
-        <div className="flex flex-col gap-2 sm:flex-row">
-          <div className="relative flex-1">
-            <Icon
-              name="MagnifyingGlassIcon"
-              size={16}
-              className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground"
-            />
-            <input
-              className="h-10 w-full rounded-lg border border-input bg-background pl-9 pr-3 text-sm"
-              placeholder="Buscar por nombre o cédula…"
-              value={query}
-              onChange={(e) => setQuery(e.target.value)}
-              disabled={loading || !!error}
-            />
+      <div className="grid gap-4 lg:grid-cols-[280px_1fr]">
+        {/* Lista de pacientes — mismo patrón que Ficha */}
+        <aside className="rounded-2xl border border-border bg-card">
+          <div className="border-b border-border px-3 py-3">
+            <div className="mb-2 flex items-center justify-between">
+              <p className="text-sm font-semibold">Pacientes de la clínica</p>
+              <button
+                type="button"
+                onClick={() => void load()}
+                className="rounded-md p-1.5 text-muted-foreground hover:bg-muted"
+                title="Recargar"
+              >
+                <Icon name="ArrowPathIcon" size={16} />
+              </button>
+            </div>
+            <div className="relative">
+              <Icon
+                name="MagnifyingGlassIcon"
+                size={14}
+                className="pointer-events-none absolute left-2.5 top-1/2 -translate-y-1/2 text-muted-foreground"
+              />
+              <input
+                className="h-9 w-full rounded-lg border border-input bg-background pl-8 pr-2 text-sm"
+                placeholder="Buscar nombre o cédula…"
+                value={query}
+                onChange={(e) => setQuery(e.target.value)}
+              />
+            </div>
+            <p className="mt-1.5 text-[11px] text-muted-foreground">
+              {loading ? 'Cargando…' : `${filtered.length} encontrado(s)`}
+            </p>
           </div>
-          <select
-            className="h-10 min-w-[260px] rounded-lg border border-input bg-background px-3 text-sm"
-            value={patientId}
-            onChange={(e) => setPatientId(e.target.value)}
-            disabled={loading || patients.length === 0}
-          >
-            <option value="">
-              {loading
-                ? 'Cargando pacientes…'
-                : patients.length === 0
-                  ? 'Sin pacientes'
-                  : `Selecciona un paciente (${filtered.length})`}
-            </option>
-            {filtered.map((p) => (
-              <option key={p.id} value={p.id}>
-                {p.label}
-              </option>
-            ))}
-          </select>
-          <button
-            type="button"
-            className="h-10 shrink-0 rounded-lg border border-input px-3 text-sm font-semibold hover:bg-muted"
-            onClick={() => void load()}
-            disabled={loading}
-            title="Recargar lista"
-          >
-            <Icon name="ArrowPathIcon" size={16} />
-          </button>
+
+          <ul className="max-h-[480px] overflow-y-auto p-2">
+            {error ? (
+              <li className="px-2 py-4 text-sm text-destructive">{error}</li>
+            ) : null}
+
+            {!loading && !error && filtered.length === 0 ? (
+              <li className="px-2 py-6 text-center text-sm text-muted-foreground">
+                {patients.length === 0 ? (
+                  <>
+                    Sin pacientes.{' '}
+                    <a href="/patient-record" className="font-semibold text-primary underline">
+                      Ir a Ficha
+                    </a>
+                  </>
+                ) : (
+                  'Ningún resultado para esa búsqueda.'
+                )}
+              </li>
+            ) : null}
+
+            {filtered.map((p) => {
+              const active = p.id === patientId;
+              return (
+                <li key={p.id}>
+                  <button
+                    type="button"
+                    onClick={() => setPatientId(p.id)}
+                    className={`flex w-full items-center gap-2.5 rounded-xl px-2.5 py-2 text-left transition-colors ${
+                      active ? 'bg-primary/10 ring-1 ring-primary/30' : 'hover:bg-muted'
+                    }`}
+                  >
+                    <span
+                      className={`flex h-9 w-9 shrink-0 items-center justify-center rounded-full text-xs font-bold ${
+                        active ? 'bg-primary text-primary-foreground' : 'bg-muted text-muted-foreground'
+                      }`}
+                    >
+                      {initials(p.fullName)}
+                    </span>
+                    <span className="min-w-0">
+                      <span className="block truncate text-sm font-semibold">{p.fullName}</span>
+                      <span className="block truncate text-[11px] text-muted-foreground">
+                        {p.document || 'Sin documento'}
+                      </span>
+                    </span>
+                  </button>
+                </li>
+              );
+            })}
+          </ul>
+        </aside>
+
+        {/* Contenido */}
+        <div className="min-w-0">
+          {selected ? (
+            <div className="space-y-4">
+              <div className="rounded-2xl border border-border bg-card px-4 py-3">
+                <p className="text-xs text-muted-foreground">Paciente seleccionado</p>
+                <p className="text-lg font-semibold">{selected.fullName}</p>
+                {selected.document ? (
+                  <p className="text-sm text-muted-foreground">C.I. {selected.document}</p>
+                ) : null}
+              </div>
+              <div className="rounded-2xl border border-border bg-card p-5">
+                <RealAestheticsTab patientId={selected.id} />
+              </div>
+            </div>
+          ) : (
+            <div className="rounded-2xl border border-dashed border-border bg-muted/30 px-6 py-16 text-center">
+              <Icon name="SparklesIcon" size={32} className="mx-auto mb-3 text-muted-foreground" />
+              <p className="font-semibold">Elige un paciente de la lista</p>
+              <p className="mt-1 text-sm text-muted-foreground">
+                Las sesiones quedan vinculadas a la ficha del paciente.
+              </p>
+            </div>
+          )}
         </div>
-
-        {error ? (
-          <p className="mt-2 text-sm text-destructive" role="alert">
-            {error}
-          </p>
-        ) : null}
-
-        {!loading && !error && patients.length === 0 ? (
-          <p className="mt-2 text-sm text-muted-foreground">
-            No hay pacientes en esta clínica. Créalos primero en{' '}
-            <a href="/patient-record" className="font-semibold text-primary underline">
-              Ficha del paciente
-            </a>
-            .
-          </p>
-        ) : null}
-
-        {selected ? (
-          <p className="mt-2 text-xs text-muted-foreground">
-            Trabajando con <span className="font-semibold text-foreground">{selected.label}</span>
-          </p>
-        ) : null}
       </div>
-
-      {patientId ? (
-        <div className="rounded-2xl border border-border bg-card p-5">
-          <RealAestheticsTab patientId={patientId} />
-        </div>
-      ) : (
-        <div className="rounded-2xl border border-dashed border-border bg-muted/30 px-6 py-16 text-center">
-          <Icon name="SparklesIcon" size={32} className="mx-auto mb-3 text-muted-foreground" />
-          <p className="font-semibold">Elige un paciente para registrar o ver sesiones de estética</p>
-          <p className="mt-1 text-sm text-muted-foreground">Las sesiones quedan vinculadas a la ficha del paciente.</p>
-        </div>
-      )}
     </div>
   );
 }
