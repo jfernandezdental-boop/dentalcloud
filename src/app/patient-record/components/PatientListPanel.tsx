@@ -21,6 +21,7 @@ export type PatientListItem = {
   civil: string;
   firstName: string;
   lastName: string;
+  hcNumber?: string;
   raw: Record<string, unknown>;
 };
 
@@ -39,7 +40,7 @@ export default function PatientListPanel({ patients, selectedId, query, onQuery,
     <aside className="flex h-full min-h-[420px] flex-col rounded-2xl border border-border bg-card">
       <div className="border-b border-border p-3">
         <div className="mb-2 flex items-center justify-between gap-2">
-          <p className="text-sm font-semibold">Pacientes de la clinica</p>
+          <p className="text-sm font-semibold">Pacientes de la clínica</p>
           {onNew && (
             <button
               type="button"
@@ -56,7 +57,7 @@ export default function PatientListPanel({ patients, selectedId, query, onQuery,
           <input
             value={query}
             onChange={(e) => onQuery(e.target.value)}
-            placeholder="Buscar nombre o cedula..."
+            placeholder="Buscar nombre o cédula..."
             className="w-full rounded-lg border border-input bg-background py-2 pl-9 pr-3 text-sm outline-none focus:border-primary"
           />
         </div>
