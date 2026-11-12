@@ -2,7 +2,7 @@
 import React, { useCallback, useEffect, useMemo, useState } from 'react';
 import Icon from '@/components/ui/AppIcon';
 import Toast from '@/components/ui/Toast';
-import { Cita, CitaStatus, procedures } from '@/lib/mockData';
+import { Cita, CitaStatus } from '@/lib/mockData';
 import { getSupabase } from '@/lib/supabase/client';
 import { useAuth } from '@/components/AuthProvider';
 import { today } from '@/app/patient-record/components/tabs/formKit';
@@ -17,20 +17,36 @@ import RealAgenda from './RealAgenda';
 import type { ViewMode } from './AgendaWorkspace';
 
 /**
- * Agenda del doctor para clínicas REALES: el mismo diseño de la maqueta (mini calendario,
- * vistas Día/Semana/Mes, estados por color, detalle de cita) pero leyendo y escribiendo en
- * appointments / patients / doctors. Nunca usa citas ni pacientes de ejemplo.
+ * Agenda del doctor para clínicas REALES.
+ * Lee y escribe en appointments / patients / doctors / procedures.
+ * Nunca usa datos de mock.
  */
 type Row = {
-  id: string; patient_id: string; doctor_id: string; date: string; start_time: string;
-  duration_min: number | null; procedure: string | null; chair: string | null; status: string | null; notes: string | null;
+  id: string;
+  patient_id: string;
+  doctor_id: string;
+  date: string;
+  start_time: string;
+  duration_min: number | null;
+  procedure: string | null;
+  chair: string | null;
+  status: string | null;
+  notes: string | null;
   patients: { first_name: string; last_name: string } | null;
   doctors: { full_name: string } | null;
 };
 type PatientOpt = { id: string; name: string; cedula: string | null };
 type DoctorOpt = { id: string; name: string; specialty: string | null };
 
-const STATUSES: CitaStatus[] = ['Pendiente', 'Confirmada', 'En sala', 'En atención', 'Atendida', 'No asistió', 'Cancelada'];
+const STATUSES: CitaStatus[] = [
+  'Pendiente',
+  'Confirmada',
+  'En sala',
+  'En atención',
+  'Atendida',
+  'No asistió',
+  'Cancelada',
+];
 const hhmm = (t: string) => String(t).slice(0, 5);
 const toMin = (t: string) => {
   const [h, m] = hhmm(t).split(':').map(Number);
@@ -61,12 +77,15 @@ export default function RealAgendaWorkspace() {
   const [list, setList] = useState<Cita[]>([]);
   const [patients, setPatients] = useState<PatientOpt[]>([]);
   const [doctors, setDoctors] = useState<DoctorOpt[] | null>(null);
+  const [procedures, setProcedures] = useState<string[]>([]);
   const [modalOpen, setModalOpen] = useState(false);
-  const [prefill, setPrefill] = useState<{ date: string; start: string; patientId?: string }>({ date: today(), start: '09:00' });
+  const [prefill, setPrefill] = useState<{ date: string; start: string; patientId?: string }>({
+    date: today(),
+    start: '09:00',
+  });
   const [selected, setSelected] = useState<Cita | null>(null);
   const [toast, setToast] = useState('');
 
-  // Rango a pedir: el mes del cursor +/- 7 días (cubre la semana en los bordes y los puntos del mini calendario).
   const month = cursor.slice(0, 7);
   const range = useMemo(() => {
     const d = new Date(`${month}-01T12:00:00`);
@@ -80,7 +99,9 @@ export default function RealAgendaWorkspace() {
   const load = useCallback(async () => {
     let q = getSupabase()
       .from('appointments')
-      .select('id, patient_id, doctor_id, date, start_time, duration_min, procedure, chair, status, notes, patients(first_name, last_name), doctors(full_name)')
+      .select(
+        'id, patient_id, doctor_id, date, start_time, duration_min, procedure, chair, status, notes, patients(first_name, last_name), doctors(full_name)',
+      )
       .gte('date', range.from)
       .lte('date', range.to)
       .order('start_time');
@@ -91,21 +112,50 @@ export default function RealAgendaWorkspace() {
   }, [range.from, range.to, clinicId]);
 
   const loadBase = useCallback(async () => {
+    if (!clinicId) return;
     const sb = getSupabase();
-    let pq = sb.from('patients').select('id, first_name, last_name, cedula').eq('active', true).order('last_name');
-    let dq = sb.from('doctors').select('id, full_name, specialty').eq('active', true).order('full_name');
-    if (clinicId) { pq = pq.eq('clinic_id', clinicId); dq = dq.eq('clinic_id', clinicId); }
-    const [p, d] = await Promise.all([pq, dq]);
-    setPatients(((p.data as { id: string; first_name: string; last_name: string; cedula: string | null }[]) || [])
-      .map((x) => ({ id: x.id, name: `${x.first_name} ${x.last_name}`.trim(), cedula: x.cedula })));
-    setDoctors(((d.data as { id: string; full_name: string; specialty: string | null }[]) || [])
-      .map((x) => ({ id: x.id, name: x.full_name, specialty: x.specialty })));
+    const [p, d, proc] = await Promise.all([
+      sb
+        .from('patients')
+        .select('id, first_name, last_name, cedula')
+        .eq('active', true)
+        .eq('clinic_id', clinicId)
+        .order('last_name'),
+      sb
+        .from('doctors')
+        .select('id, full_name, specialty')
+        .eq('active', true)
+        .eq('clinic_id', clinicId)
+        .order('full_name'),
+      sb
+        .from('procedures')
+        .select('name')
+        .eq('active', true)
+        .eq('clinic_id', clinicId)
+        .order('name'),
+    ]);
+    setPatients(
+      ((p.data as { id: string; first_name: string; last_name: string; cedula: string | null }[]) || []).map(
+        (x) => ({ id: x.id, name: `${x.first_name} ${x.last_name}`.trim(), cedula: x.cedula }),
+      ),
+    );
+    setDoctors(
+      ((d.data as { id: string; full_name: string; specialty: string | null }[]) || []).map((x) => ({
+        id: x.id,
+        name: x.full_name,
+        specialty: x.specialty,
+      })),
+    );
+    setProcedures(((proc.data as { name: string }[]) || []).map((x) => x.name));
   }, [clinicId]);
 
-  useEffect(() => { loadBase(); }, [loadBase]);
-  useEffect(() => { load(); }, [load]);
+  useEffect(() => {
+    loadBase();
+  }, [loadBase]);
+  useEffect(() => {
+    load();
+  }, [load]);
 
-  // Llegar desde la ficha del paciente: /doctor-agenda?patient=ID abre "Nueva cita" con ese paciente.
   useEffect(() => {
     if (!doctors || doctors.length === 0 || typeof window === 'undefined') return;
     const pid = new URLSearchParams(window.location.search).get('patient');
@@ -116,7 +166,10 @@ export default function RealAgendaWorkspace() {
     }
   }, [doctors]);
 
-  const filtered = useMemo(() => list.filter((c) => doctorId === 'all' || c.doctorId === doctorId), [list, doctorId]);
+  const filtered = useMemo(
+    () => list.filter((c) => doctorId === 'all' || c.doctorId === doctorId),
+    [list, doctorId],
+  );
 
   const shift = (dir: -1 | 1) => {
     const d = new Date(`${cursor}T12:00:00`);
@@ -134,18 +187,34 @@ export default function RealAgendaWorkspace() {
   async function handleCreate(p: NewCitaPayload) {
     if (!clinicId) return;
     const sb = getSupabase();
-    // Evitar dos citas al mismo tiempo con el mismo odontólogo
-    const { data: dayRows } = await sb.from('appointments').select('id, start_time, duration_min, status').eq('doctor_id', p.doctorId).eq('date', p.date);
+    const { data: dayRows } = await sb
+      .from('appointments')
+      .select('id, start_time, duration_min, status')
+      .eq('doctor_id', p.doctorId)
+      .eq('date', p.date);
     const s0 = toMin(p.start);
     const e0 = s0 + p.duration;
-    const clash = (dayRows || []).find((r) => r.status !== 'Cancelada' && toMin(r.start_time) < e0 && toMin(r.start_time) + (r.duration_min || 30) > s0);
+    const clash = (dayRows || []).find(
+      (r) =>
+        r.status !== 'Cancelada' &&
+        toMin(r.start_time) < e0 &&
+        toMin(r.start_time) + (r.duration_min || 30) > s0,
+    );
     if (clash) {
       setToast(`El odontólogo ya tiene una cita a las ${hhmm(clash.start_time)} en ese horario.`);
       return;
     }
     const { error } = await sb.from('appointments').insert({
-      clinic_id: clinicId, patient_id: p.patientId, doctor_id: p.doctorId, date: p.date, start_time: p.start,
-      duration_min: p.duration, procedure: p.procedure || null, chair: p.chair || null, notes: p.notes || null, status: 'Pendiente',
+      clinic_id: clinicId,
+      patient_id: p.patientId,
+      doctor_id: p.doctorId,
+      date: p.date,
+      start_time: p.start,
+      duration_min: p.duration,
+      procedure: p.procedure || null,
+      chair: p.chair || null,
+      notes: p.notes || null,
+      status: 'Pendiente',
     });
     if (error) {
       setToast(`No se pudo guardar: ${error.message}`);
@@ -176,7 +245,6 @@ export default function RealAgendaWorkspace() {
     setToast(`Estado actualizado a «${status}»`);
   }
 
-  // Sin odontólogos no se puede agendar: la pantalla de alta de odontólogo ya existe en RealAgenda.
   if (doctors && doctors.length === 0) return <RealAgenda />;
 
   const todayCount = filtered.filter((c) => c.date === cursor).length;
@@ -187,7 +255,8 @@ export default function RealAgendaWorkspace() {
         <div>
           <h1 className="text-2xl font-semibold">Agenda del doctor</h1>
           <p className="mt-1 text-sm text-muted-foreground">
-            Selecciona un día o una franja horaria para agendar una cita. {todayCount} {todayCount === 1 ? 'cita' : 'citas'} en el día seleccionado.
+            Selecciona un día o una franja horaria para agendar una cita. {todayCount}{' '}
+            {todayCount === 1 ? 'cita' : 'citas'} en el día seleccionado.
           </p>
         </div>
         <button
@@ -238,8 +307,12 @@ export default function RealAgendaWorkspace() {
             doctors={doctors || []}
           />
           <div className="animate-fade-in" key={`${view}-${cursor}-${doctorId}`}>
-            {view === 'day' && <DayView date={cursor} citas={filtered} onSlot={(t) => openBooking(cursor, t)} onSelect={setSelected} />}
-            {view === 'week' && <WeekView date={cursor} citas={filtered} onSlot={(d, t) => openBooking(d, t)} onSelect={setSelected} />}
+            {view === 'day' && (
+              <DayView date={cursor} citas={filtered} onSlot={(t) => openBooking(cursor, t)} onSelect={setSelected} />
+            )}
+            {view === 'week' && (
+              <WeekView date={cursor} citas={filtered} onSlot={(d, t) => openBooking(d, t)} onSelect={setSelected} />
+            )}
             {view === 'month' && (
               <MonthView
                 date={cursor}

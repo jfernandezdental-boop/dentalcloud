@@ -6,7 +6,6 @@ import Icon from '@/components/ui/AppIcon';
 import Toggle from '@/components/ui/Toggle';
 import { FieldError, RequiredMark, RequiredLegend, inputClass, ariaFor } from '@/components/ui/FormField';
 import { todayISO } from '@/lib/validators';
-import { doctors as mockDoctors, patients as mockPatients, procedures as mockProcedures } from '@/lib/mockData';
 
 export interface NewCitaPayload {
   patientId: string;
@@ -37,13 +36,21 @@ interface NewAppointmentModalProps {
   onClose: () => void;
   defaults: { date: string; start: string; patientId?: string };
   onCreate: (p: NewCitaPayload) => void | Promise<void>;
-  /** Datos reales de la clínica; si no se pasan, usa los de ejemplo (clínica demo). */
+  /** Datos reales de la clínica. Sin fallback a mock. */
   doctors?: { id: string; name: string; specialty?: string | null }[];
   patients?: { id: string; name: string; cedula?: string | null }[];
   procedures?: string[];
 }
 
-export default function NewAppointmentModal({ open, onClose, defaults, onCreate, doctors = mockDoctors, patients = mockPatients, procedures = mockProcedures }: NewAppointmentModalProps) {
+export default function NewAppointmentModal({
+  open,
+  onClose,
+  defaults,
+  onCreate,
+  doctors = [],
+  patients = [],
+  procedures = [],
+}: NewAppointmentModalProps) {
   const [reminder, setReminder] = useState(true);
   const [saving, setSaving] = useState(false);
   const [pq, setPq] = useState('');
@@ -57,7 +64,16 @@ export default function NewAppointmentModal({ open, onClose, defaults, onCreate,
     formState: { errors },
   } = useForm<FormValues>({
     mode: 'onTouched',
-    defaultValues: { patientId: defaults.patientId || '', doctorId: doctors[0]?.id || '', date: defaults.date, start: defaults.start, duration: 30, procedure: procedures[0] || '', chair: 'Sillón 1', notes: '' },
+    defaultValues: {
+      patientId: defaults.patientId || '',
+      doctorId: doctors[0]?.id || '',
+      date: defaults.date,
+      start: defaults.start,
+      duration: 30,
+      procedure: procedures[0] || '',
+      chair: 'Sillón 1',
+      notes: '',
+    },
   });
   const selectedDate = watch('date');
   const duration = watch('duration');
@@ -69,7 +85,7 @@ export default function NewAppointmentModal({ open, onClose, defaults, onCreate,
     return patients.filter(
       (p) =>
         p.name.toLowerCase().includes(q) ||
-        String(p.cedula || '').includes(q)
+        String(p.cedula || '').includes(q),
     );
   }, [pq, patients]);
 
@@ -77,7 +93,16 @@ export default function NewAppointmentModal({ open, onClose, defaults, onCreate,
 
   useEffect(() => {
     if (open) {
-      reset({ patientId: defaults.patientId || '', doctorId: doctors[0]?.id || '', date: defaults.date, start: defaults.start, duration: 30, procedure: procedures[0] || '', chair: 'Sillón 1', notes: '' });
+      reset({
+        patientId: defaults.patientId || '',
+        doctorId: doctors[0]?.id || '',
+        date: defaults.date,
+        start: defaults.start,
+        duration: 30,
+        procedure: procedures[0] || '',
+        chair: 'Sillón 1',
+        notes: '',
+      });
       setReminder(true);
       setSaving(false);
       setPq('');
@@ -89,19 +114,21 @@ export default function NewAppointmentModal({ open, onClose, defaults, onCreate,
     setSaving(true);
     const patient = patients.find((p) => p.id === v.patientId);
     setTimeout(() => {
-      Promise.resolve(onCreate({
-        patientId: v.patientId,
-        patientName: patient ? patient.name : 'Paciente',
-        doctorId: v.doctorId,
-        date: v.date,
-        start: v.start,
-        duration: Number(v.duration),
-        procedure: v.procedure,
-        chair: v.chair,
-        reminder,
-        notes: v.notes.trim(),
-      })).finally(() => setSaving(false));
-    }, 600);
+      Promise.resolve(
+        onCreate({
+          patientId: v.patientId,
+          patientName: patient ? patient.name : 'Paciente',
+          doctorId: v.doctorId,
+          date: v.date,
+          start: v.start,
+          duration: Number(v.duration),
+          procedure: v.procedure,
+          chair: v.chair,
+          reminder,
+          notes: v.notes.trim(),
+        }),
+      ).finally(() => setSaving(false));
+    }, 400);
   };
 
   const endsAfterClose = (start: string) => {
@@ -119,29 +146,56 @@ export default function NewAppointmentModal({ open, onClose, defaults, onCreate,
       subtitle="El bot IA enviará recordatorios al paciente y al doctor según tu configuración."
       footer={
         <>
-          <button onClick={onClose} className="rounded-lg border border-input bg-card px-4 py-2 text-sm font-semibold transition-all hover:bg-muted active:scale-95">Cancelar</button>
+          <button
+            onClick={onClose}
+            className="rounded-lg border border-input bg-card px-4 py-2 text-sm font-semibold transition-all hover:bg-muted active:scale-95"
+          >
+            Cancelar
+          </button>
           <button
             form="new-cita-form"
             type="submit"
-            disabled={saving}
+            disabled={saving || patients.length === 0 || doctors.length === 0}
             className="inline-flex min-w-[150px] items-center justify-center gap-2 rounded-lg bg-primary px-4 py-2 text-sm font-semibold text-primary-foreground transition-all hover:opacity-90 active:scale-95 disabled:opacity-70"
           >
-            {saving ? (<><Icon name="ArrowPathIcon" size={16} className="animate-spin" />Agendando…</>) : 'Agendar cita'}
+            {saving ? (
+              <>
+                <Icon name="ArrowPathIcon" size={16} className="animate-spin" />
+                Agendando…
+              </>
+            ) : (
+              'Agendar cita'
+            )}
           </button>
         </>
       }
     >
       <form id="new-cita-form" onSubmit={handleSubmit(submit)} className="grid gap-4 sm:grid-cols-2" noValidate>
-        <div className="sm:col-span-2"><RequiredLegend /></div>
+        <div className="sm:col-span-2">
+          <RequiredLegend />
+        </div>
+
+        {patients.length === 0 && (
+          <div className="sm:col-span-2 rounded-lg border border-warning/40 bg-warning/10 px-3 py-2 text-sm text-warning">
+            No hay pacientes registrados en esta clínica. Crea uno desde Ficha de paciente.
+          </div>
+        )}
 
         <div className="sm:col-span-2 relative">
-          <label htmlFor="patientSearch" className="mb-1.5 block text-sm font-semibold">Paciente<RequiredMark /></label>
+          <label htmlFor="patientSearch" className="mb-1.5 block text-sm font-semibold">
+            Paciente
+            <RequiredMark />
+          </label>
           <input
             id="patientSearch"
             type="text"
             className={inputClass(!!errors.patientId)}
             placeholder="Escribe nombre o cédula para buscar…"
-            value={selectedPatient ? `${selectedPatient.name}${selectedPatient.cedula ? ` — C.I. ${selectedPatient.cedula}` : ''}` : pq}
+            value={
+              selectedPatient
+                ? `${selectedPatient.name}${selectedPatient.cedula ? ` — C.I. ${selectedPatient.cedula}` : ''}`
+                : pq
+            }
             onChange={(e) => {
               setPq(e.target.value);
               setValue('patientId', '');
@@ -167,7 +221,8 @@ export default function NewAppointmentModal({ open, onClose, defaults, onCreate,
                         setShowList(false);
                       }}
                     >
-                      {p.name}{p.cedula ? ` — C.I. ${p.cedula}` : ''}
+                      {p.name}
+                      {p.cedula ? ` — C.I. ${p.cedula}` : ''}
                     </button>
                   </li>
                 ))
@@ -178,26 +233,53 @@ export default function NewAppointmentModal({ open, onClose, defaults, onCreate,
         </div>
 
         <div>
-          <label htmlFor="doctorId" className="mb-1.5 block text-sm font-semibold">Odontólogo<RequiredMark /></label>
-          <select id="doctorId" className={inputClass(!!errors.doctorId)} {...ariaFor('doctorId', !!errors.doctorId)} {...register('doctorId', { required: 'Selecciona un odontólogo' })}>
+          <label htmlFor="doctorId" className="mb-1.5 block text-sm font-semibold">
+            Odontólogo
+            <RequiredMark />
+          </label>
+          <select
+            id="doctorId"
+            className={inputClass(!!errors.doctorId)}
+            {...ariaFor('doctorId', !!errors.doctorId)}
+            {...register('doctorId', { required: 'Selecciona un odontólogo' })}
+          >
+            {doctors.length === 0 && <option value="">Sin odontólogos</option>}
             {doctors.map((d) => (
-              <option key={d.id} value={d.id}>{d.name}{d.specialty ? ` · ${d.specialty}` : ''}</option>
+              <option key={d.id} value={d.id}>
+                {d.name}
+                {d.specialty ? ` · ${d.specialty}` : ''}
+              </option>
             ))}
           </select>
           <FieldError id="doctorId" message={errors.doctorId?.message} />
         </div>
+
         <div>
-          <label htmlFor="procedure" className="mb-1.5 block text-sm font-semibold">Procedimiento<RequiredMark /></label>
-          <select id="procedure" className={inputClass(!!errors.procedure)} {...ariaFor('procedure', !!errors.procedure)} {...register('procedure', { required: 'Selecciona un procedimiento' })}>
+          <label htmlFor="procedure" className="mb-1.5 block text-sm font-semibold">
+            Procedimiento
+            <RequiredMark />
+          </label>
+          <select
+            id="procedure"
+            className={inputClass(!!errors.procedure)}
+            {...ariaFor('procedure', !!errors.procedure)}
+            {...register('procedure', { required: 'Selecciona un procedimiento' })}
+          >
+            {procedures.length === 0 && <option value="">Sin procedimientos en catálogo</option>}
             {procedures.map((p) => (
-              <option key={`proc-${p}`} value={p}>{p}</option>
+              <option key={`proc-${p}`} value={p}>
+                {p}
+              </option>
             ))}
           </select>
           <FieldError id="procedure" message={errors.procedure?.message} />
         </div>
 
         <div>
-          <label htmlFor="date" className="mb-1.5 block text-sm font-semibold">Fecha<RequiredMark /></label>
+          <label htmlFor="date" className="mb-1.5 block text-sm font-semibold">
+            Fecha
+            <RequiredMark />
+          </label>
           <input
             id="date"
             type="date"
@@ -216,9 +298,13 @@ export default function NewAppointmentModal({ open, onClose, defaults, onCreate,
           />
           <FieldError id="date" message={errors.date?.message} />
         </div>
+
         <div className="grid grid-cols-2 gap-3">
           <div>
-            <label htmlFor="start" className="mb-1.5 block text-sm font-semibold">Hora<RequiredMark /></label>
+            <label htmlFor="start" className="mb-1.5 block text-sm font-semibold">
+              Hora
+              <RequiredMark />
+            </label>
             <input
               id="start"
               type="time"
@@ -242,10 +328,15 @@ export default function NewAppointmentModal({ open, onClose, defaults, onCreate,
             <FieldError id="start" message={errors.start?.message} />
           </div>
           <div>
-            <label htmlFor="duration" className="mb-1.5 block text-sm font-semibold">Duración<RequiredMark /></label>
+            <label htmlFor="duration" className="mb-1.5 block text-sm font-semibold">
+              Duración
+              <RequiredMark />
+            </label>
             <select id="duration" className={inputClass(!!errors.duration)} {...register('duration', { required: 'Selecciona la duración' })}>
               {[15, 30, 45, 60, 90, 120].map((m) => (
-                <option key={`dur-${m}`} value={m}>{m} min</option>
+                <option key={`dur-${m}`} value={m}>
+                  {m} min
+                </option>
               ))}
             </select>
             <FieldError id="duration" message={errors.duration?.message} />
@@ -253,14 +344,20 @@ export default function NewAppointmentModal({ open, onClose, defaults, onCreate,
         </div>
 
         <div>
-          <label htmlFor="chair" className="mb-1.5 block text-sm font-semibold">Sillón / consultorio<RequiredMark /></label>
+          <label htmlFor="chair" className="mb-1.5 block text-sm font-semibold">
+            Sillón / consultorio
+            <RequiredMark />
+          </label>
           <select id="chair" className={inputClass(!!errors.chair)} {...register('chair', { required: 'Selecciona un sillón' })}>
             {['Sillón 1', 'Sillón 2', 'Sillón 3', 'Sillón 4'].map((c) => (
-              <option key={`chair-${c}`} value={c}>{c}</option>
+              <option key={`chair-${c}`} value={c}>
+                {c}
+              </option>
             ))}
           </select>
           <FieldError id="chair" message={errors.chair?.message} />
         </div>
+
         <div className="flex items-end">
           <div className="flex w-full items-center justify-between rounded-lg border border-input bg-muted/40 px-3.5 py-2">
             <div>
@@ -272,15 +369,21 @@ export default function NewAppointmentModal({ open, onClose, defaults, onCreate,
         </div>
 
         <div className="sm:col-span-2">
-          <label htmlFor="notes" className="mb-1.5 block text-sm font-semibold">Notas internas</label>
-          <p className="mb-1.5 text-xs text-muted-foreground">Solo visible para el personal de la clínica. Máximo 300 caracteres.</p>
+          <label htmlFor="notes" className="mb-1.5 block text-sm font-semibold">
+            Notas internas
+          </label>
+          <p className="mb-1.5 text-xs text-muted-foreground">
+            Solo visible para el personal de la clínica. Máximo 300 caracteres.
+          </p>
           <textarea
             id="notes"
             rows={3}
             className={inputClass(!!errors.notes)}
             placeholder="Ej. Paciente con ansiedad dental, requiere sedación consciente…"
             {...ariaFor('notes', !!errors.notes)}
-            {...register('notes', { maxLength: { value: 300, message: 'Las notas no pueden superar 300 caracteres' } })}
+            {...register('notes', {
+              maxLength: { value: 300, message: 'Las notas no pueden superar 300 caracteres' },
+            })}
           />
           <FieldError id="notes" message={errors.notes?.message} />
         </div>
