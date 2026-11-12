@@ -29,13 +29,23 @@ function fmtDate(iso: string): string {
   return `${d}/${m}/${y}`;
 }
 
+function fmtMoney(n: number): string {
+  return new Intl.NumberFormat('es-EC', { style: 'currency', currency: 'USD' }).format(n);
+}
+
 function mapPatient(row: Record<string, unknown>): PatientListItem {
   const first =
     String(row.first_name || row.nombres || '') ||
-    String(row.full_name || row.name || '').split(' ').slice(0, -1).join(' ');
+    String(row.full_name || row.name || '')
+      .split(' ')
+      .slice(0, -1)
+      .join(' ');
   const last =
     String(row.last_name || row.apellidos || '') ||
-    String(row.full_name || row.name || '').split(' ').slice(-1).join(' ');
+    String(row.full_name || row.name || '')
+      .split(' ')
+      .slice(-1)
+      .join(' ');
   const fullName =
     String(row.full_name || row.name || '').trim() ||
     [first, last].filter(Boolean).join(' ') ||
@@ -59,9 +69,17 @@ function mapPatient(row: Record<string, unknown>): PatientListItem {
     emergencyPhone: String(row.emergency_phone || ''),
     occupation: String(row.occupation || row.ocupacion || ''),
     civil: String(row.civil_status || row.estado_civil || ''),
+    hcNumber: String(row.hc_number || row.hc || row.history_number || ''),
     raw: row,
   };
 }
+
+type ExtraInfo = {
+  lastVisit: string | null;
+  nextAppt: string | null;
+  balance: number | null;
+  doctorName: string | null;
+};
 
 export default function PatientRecordWorkspace() {
   const { user } = useAuth();
@@ -71,6 +89,12 @@ export default function PatientRecordWorkspace() {
   const [loading, setLoading] = useState(true);
   const [openNew, setOpenNew] = useState(false);
   const [toast, setToast] = useState('');
+  const [extra, setExtra] = useState<ExtraInfo>({
+    lastVisit: null,
+    nextAppt: null,
+    balance: null,
+    doctorName: null,
+  });
 
   const load = useCallback(async () => {
     setLoading(true);
@@ -97,6 +121,78 @@ export default function PatientRecordWorkspace() {
     void load();
   }, [load]);
 
+  // Cargar última visita, próxima cita, saldo y odontólogo del paciente seleccionado
+  useEffect(() => {
+    if (!selectedId || !hasSupabaseEnv()) {
+      setExtra({ lastVisit: null, nextAppt: null, balance: null, doctorName: null });
+      return;
+    }
+    let cancelled = false;
+    (async () => {
+      const sb = getSupabase();
+      const today = new Date().toLocaleDateString('en-CA');
+
+      const [past, future, budgets] = await Promise.all([
+        sb
+          .from('appointments')
+          .select('date, start_time, doctors(full_name)')
+          .eq('patient_id', selectedId)
+          .lt('date', today)
+          .order('date', { ascending: false })
+          .limit(1),
+        sb
+          .from('appointments')
+          .select('date, start_time, doctors(full_name)')
+          .eq('patient_id', selectedId)
+          .gte('date', today)
+          .neq('status', 'Cancelada')
+          .order('date', { ascending: true })
+          .limit(1),
+        sb
+          .from('budgets')
+          .select('paid, budget_lines(qty, unit_price, discount)')
+          .eq('patient_id', selectedId),
+      ]);
+
+      if (cancelled) return;
+
+      const pastRow = (past.data as { date: string; start_time: string; doctors: { full_name: string } | null }[] | null)?.[0];
+      const futureRow = (future.data as { date: string; start_time: string; doctors: { full_name: string } | null }[] | null)?.[0];
+
+      let balance: number | null = null;
+      if (budgets.data && Array.isArray(budgets.data)) {
+        let total = 0;
+        let paid = 0;
+        for (const b of budgets.data as {
+          paid: number | null;
+          budget_lines: { qty: number | null; unit_price: number | null; discount?: number | null }[];
+        }[]) {
+          paid += Number(b.paid) || 0;
+          for (const l of b.budget_lines || []) {
+            const q = Number(l.qty) || 0;
+            const u = Number(l.unit_price) || 0;
+            const d = Math.min(100, Math.max(0, Number(l.discount) || 0));
+            total += q * u * (1 - d / 100);
+          }
+        }
+        balance = Math.max(0, total - paid);
+      }
+
+      setExtra({
+        lastVisit: pastRow ? fmtDate(pastRow.date) : null,
+        nextAppt: futureRow
+          ? `${fmtDate(futureRow.date)} · ${String(futureRow.start_time || '').slice(0, 5)}`
+          : null,
+        balance,
+        doctorName:
+          futureRow?.doctors?.full_name || pastRow?.doctors?.full_name || null,
+      });
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, [selectedId]);
+
   const filtered = useMemo(() => {
     const q = query.trim().toLowerCase();
     if (!q) return patients;
@@ -118,7 +214,7 @@ export default function PatientRecordWorkspace() {
       return;
     }
     if (!user?.clinicId) {
-      setToast('No hay una clinica activa en tu sesion. Cierra sesion y vuelve a entrar.');
+      setToast('No hay una clínica activa en tu sesión. Cierra sesión y vuelve a entrar.');
       return;
     }
     const fullName = `${p.firstName.trim()} ${p.lastName.trim()}`.trim();
@@ -139,7 +235,7 @@ export default function PatientRecordWorkspace() {
     const { data, error } = await getSupabase().from('patients').insert(payload).select('*').maybeSingle();
     if (error) {
       const dup = /duplicate|unique/i.test(error.message);
-      setToast(dup ? 'Ya existe un paciente con esa cedula en tu clinica.' : `No se pudo registrar: ${error.message}`);
+      setToast(dup ? 'Ya existe un paciente con esa cédula en tu clínica.' : `No se pudo registrar: ${error.message}`);
       return;
     }
     setOpenNew(false);
@@ -185,6 +281,12 @@ export default function PatientRecordWorkspace() {
         .join('')
     : '—';
 
+  const hcLabel = selected
+    ? selected.hcNumber
+      ? `HC N.º ${selected.hcNumber}`
+      : `HC N.º ${selected.id.replace(/\D/g, '').slice(-4).padStart(4, '0') || '—'}`
+    : '';
+
   return (
     <div className="grid gap-5 xl:grid-cols-[280px_1fr]">
       <PatientListPanel
@@ -217,6 +319,7 @@ export default function PatientRecordWorkspace() {
                   </div>
                   <p className="mt-1 text-sm text-muted-foreground">
                     {[
+                      hcLabel,
                       selected.document ? `C.I. ${selected.document}` : null,
                       ageFromBirth(selected.birth),
                       selected.sex || null,
@@ -227,20 +330,26 @@ export default function PatientRecordWorkspace() {
                   </p>
                   <dl className="mt-3 grid grid-cols-2 gap-x-6 gap-y-2 text-sm sm:grid-cols-4">
                     <div>
-                      <dt className="text-xs text-muted-foreground">Celular</dt>
-                      <dd className="font-semibold">{selected.phone || '—'}</dd>
+                      <dt className="text-xs text-muted-foreground">Última visita</dt>
+                      <dd className="tabular font-semibold">{extra.lastVisit || '—'}</dd>
                     </div>
                     <div>
-                      <dt className="text-xs text-muted-foreground">Correo</dt>
-                      <dd className="truncate font-semibold">{selected.email || '—'}</dd>
+                      <dt className="text-xs text-muted-foreground">Próxima cita</dt>
+                      <dd className="tabular font-semibold">{extra.nextAppt || '—'}</dd>
                     </div>
                     <div>
-                      <dt className="text-xs text-muted-foreground">Ciudad</dt>
-                      <dd className="font-semibold">{selected.city || '—'}</dd>
+                      <dt className="text-xs text-muted-foreground">Saldo pendiente</dt>
+                      <dd
+                        className={`tabular font-semibold ${
+                          extra.balance != null && extra.balance > 0 ? 'text-destructive' : ''
+                        }`}
+                      >
+                        {extra.balance != null ? fmtMoney(extra.balance) : '—'}
+                      </dd>
                     </div>
                     <div>
-                      <dt className="text-xs text-muted-foreground">Nacimiento</dt>
-                      <dd className="font-semibold">{selected.birth ? fmtDate(selected.birth) : '—'}</dd>
+                      <dt className="text-xs text-muted-foreground">Odontólogo</dt>
+                      <dd className="font-semibold">{extra.doctorName || '—'}</dd>
                     </div>
                   </dl>
                 </>
@@ -252,16 +361,24 @@ export default function PatientRecordWorkspace() {
               )}
             </div>
             <div className="flex flex-wrap gap-2">
+              <button
+                type="button"
+                onClick={() => setOpenNew(true)}
+                className="inline-flex items-center gap-2 rounded-lg border border-primary bg-primary/10 px-4 py-2.5 text-sm font-semibold text-primary transition-all hover:bg-primary/20 active:scale-95"
+              >
+                <Icon name="UserPlusIcon" size={16} />
+                Nuevo paciente
+              </button>
               <Link
                 href="/interactive-odontogram"
-                className="inline-flex items-center gap-2 rounded-lg bg-primary px-4 py-2.5 text-sm font-semibold text-primary-foreground"
+                className="inline-flex items-center gap-2 rounded-lg bg-primary px-4 py-2.5 text-sm font-semibold text-primary-foreground transition-all hover:opacity-90 active:scale-95"
               >
                 <Icon name="PuzzlePieceIcon" size={16} />
-                Odontograma
+                Abrir odontograma
               </Link>
               <Link
                 href={selected ? `/doctor-agenda?patient=${selected.id}` : '/doctor-agenda'}
-                className="inline-flex items-center gap-2 rounded-lg border border-input px-4 py-2.5 text-sm font-semibold"
+                className="inline-flex items-center gap-2 rounded-lg border border-input bg-card px-4 py-2.5 text-sm font-semibold transition-all hover:bg-muted active:scale-95"
               >
                 <Icon name="CalendarDaysIcon" size={16} />
                 Agendar
