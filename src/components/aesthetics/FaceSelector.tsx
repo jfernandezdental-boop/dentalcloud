@@ -10,10 +10,11 @@ type Props = {
 type ViewId = 'left' | 'front' | 'right';
 type Box = { left: number; top: number; w: number; h: number };
 
+/** Archivos reales en public/aesthetics/ (nombres subidos al repo). */
 const VIEWS: { id: ViewId; label: string; src: string; width: number; height: number }[] = [
-  { id: 'left', label: 'Perfil izquierdo', src: '/aesthetics/face-left.png', width: 488, height: 464 },
-  { id: 'front', label: 'Frente', src: '/aesthetics/face-front.png', width: 447, height: 455 },
-  { id: 'right', label: 'Perfil derecho', src: '/aesthetics/face-right.png', width: 470, height: 466 },
+  { id: 'left', label: 'Perfil izquierdo', src: '/aesthetics/izquierdo.png', width: 488, height: 464 },
+  { id: 'front', label: 'Frente', src: '/aesthetics/frente.png', width: 447, height: 455 },
+  { id: 'right', label: 'Perfil derecho', src: '/aesthetics/derecho.png', width: 470, height: 466 },
 ];
 
 const HITS: Record<ViewId, Partial<Record<ZoneCode, Box[]>>> = {
@@ -99,7 +100,7 @@ export default function FaceSelector({ selected, onToggle }: Props) {
           />
         ) : (
           <p className="absolute inset-0 grid place-items-center p-4 text-center text-sm text-muted-foreground">
-            Falta {current.src}. Sube las PNG a public/aesthetics/.
+            Falta {current.src}
           </p>
         )}
 
