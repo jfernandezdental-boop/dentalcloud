@@ -52,7 +52,7 @@ export default function NewPatientModal({ open, onClose, onCreate, defaultCountr
     watch,
     setValue,
     getValues,
-    trigger,
+    setError,
     formState: { errors },
   } = useForm<NewPatient>({ mode: 'onTouched', defaultValues: makeDefaults(defaultCountry) });
   const idCountry = watch('idCountry') || getCountry(defaultCountry).code;
@@ -67,10 +67,20 @@ export default function NewPatientModal({ open, onClose, onCreate, defaultCountr
   }, [open, reset, defaultCountry]);
 
   const submit = async (v: NewPatient) => {
+    // Validar siempre: ceros OK; cédula real mala → no guardar
+    const doc = validateDocument(v.idCountry, v.idType, v.cedula);
+    if (!doc.ok) {
+      setError('cedula', { type: 'validate', message: doc.error });
+      return;
+    }
     setSaving(true);
     try {
-      const doc = validateDocument(v.idCountry, v.idType, v.cedula);
-      await onCreate({ ...v, cedula: doc.ok ? doc.value : v.cedula.trim(), firstName: v.firstName.trim(), lastName: v.lastName.trim() });
+      await onCreate({
+        ...v,
+        cedula: doc.value,
+        firstName: v.firstName.trim(),
+        lastName: v.lastName.trim(),
+      });
     } finally {
       setSaving(false);
     }
@@ -175,7 +185,7 @@ export default function NewPatientModal({ open, onClose, onCreate, defaultCountr
             {...register('cedula', rules.document(() => getValues('idCountry'), () => getValues('idType')))}
           />
           <p className="mt-1 text-xs text-muted-foreground">
-            Por defecto va en ceros según el país. Puedes guardar así y completar el número real después.
+            Por defecto va en ceros según el país (se puede guardar). Si escribes un número real, debe ser válido o no se guardará.
           </p>
           <FieldError id="cedula" message={errors.cedula?.message} />
         </div>

@@ -221,12 +221,20 @@ export default function PatientRecordWorkspace() {
       setToast('No hay una clínica activa en tu sesión. Cierra sesión y vuelve a entrar.');
       return;
     }
+
+    // Doble validación: no guardar si el documento es inválido (ceros del largo correcto sí pasan)
+    const doc = validateDocument(p.idCountry, p.idType, p.cedula);
+    if (!doc.ok) {
+      setToast(`Documento inválido: ${doc.error}`);
+      return;
+    }
+
     const fullName = `${p.firstName.trim()} ${p.lastName.trim()}`.trim();
     const payload: Record<string, unknown> = {
       clinic_id: user.clinicId,
       first_name: p.firstName.trim(),
       last_name: p.lastName.trim(),
-      cedula: p.cedula.trim(),
+      cedula: doc.value,
       id_country: p.idCountry,
       id_type: p.idType,
       birth_date: p.birthDate || null,
@@ -252,10 +260,18 @@ export default function PatientRecordWorkspace() {
 
   const handleProfileSaved = async (values: Record<string, string>) => {
     if (!selected || !hasSupabaseEnv()) return;
+
+    // No guardar si la cédula es inválida (solo ceros del largo correcto o documento real válido)
+    const doc = validateDocument(values.idCountry, values.idType, values.cedula);
+    if (!doc.ok) {
+      setToast(`No se guardó: ${doc.error}`);
+      throw new Error(doc.error); // evita que ProfileTab cierre el modo edición
+    }
+
     const payload: Record<string, unknown> = {
       first_name: values.firstName.trim(),
       last_name: values.lastName.trim(),
-      cedula: (() => { const r = validateDocument(values.idCountry, values.idType, values.cedula); return r.ok ? r.value : values.cedula.trim(); })(),
+      cedula: doc.value,
       id_country: values.idCountry,
       id_type: values.idType,
       birth_date: values.birth || null,
@@ -275,7 +291,7 @@ export default function PatientRecordWorkspace() {
     const { error } = await getSupabase().from('patients').update(payload).eq('id', selected.id);
     if (error) {
       setToast(`Error al guardar: ${error.message}`);
-      return;
+      throw new Error(error.message);
     }
     setToast('Datos del paciente guardados');
     await load();

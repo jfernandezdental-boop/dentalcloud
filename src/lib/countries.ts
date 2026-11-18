@@ -210,11 +210,29 @@ export type DocResult = { ok: true; value: string } | { ok: false; error: string
 
 /**
  * ¿Es un documento placeholder (solo ceros)?
- * Se usa en altas rápidas: no se trata como error de validación.
+ * Sin tipo de documento: cualquier secuencia de 5+ ceros.
+ * Con país/tipo: debe coincidir el largo esperado (ej. EC cédula = 10 ceros).
  */
-export function isPlaceholderDocument(raw: string | null | undefined): boolean {
+export function isPlaceholderDocument(
+  raw: string | null | undefined,
+  country?: string | null,
+  type?: string | null,
+): boolean {
   const d = digits(String(raw || ''));
-  return d.length >= 5 && /^0+$/.test(d);
+  if (!d.length || !/^0+$/.test(d)) return false;
+
+  if (country != null || type != null) {
+    const c = getCountry(country);
+    const doc = (type && c.docs.find((x) => x.code === type)) || c.docs[0];
+    const len = doc.placeholderLen ?? 10;
+    // Aceptar exactamente el largo del tipo (o 7–8 para RUT/CI variables)
+    if (c.code === 'CL' && doc.code === 'RUT') return d.length === 7 || d.length === 8 || d.length === 9;
+    if (c.code === 'CO' && doc.code === 'CC') return d.length >= 6 && d.length <= 10;
+    if (c.code === 'AR' && doc.code === 'DNI') return d.length === 7 || d.length === 8;
+    return d.length === len;
+  }
+
+  return d.length >= 5;
 }
 
 /**
@@ -254,20 +272,24 @@ export function placeholderDocument(country?: string | null, type?: string | nul
   return '0'.repeat(len);
 }
 
-/** Valida un documento según país y tipo. `value` devuelve el número normalizado para guardar. */
+/**
+ * Valida un documento según país y tipo.
+ * - Ceros del largo correcto → OK (placeholder para alta rápida).
+ * - Documento real válido → OK (normalizado).
+ * - Cualquier otro valor → error; el llamador NO debe guardar.
+ */
 export function validateDocument(country: string | null | undefined, type: string, raw: string): DocResult {
   const doc = getCountry(country).docs.find((x) => x.code === type);
   if (!doc) return { ok: false, error: 'Tipo de documento no válido para este país' };
   if (!raw?.trim()) return { ok: false, error: 'Ingresa el número de documento' };
 
-  // Placeholder de ceros: válido para altas rápidas (luego se edita el real)
-  if (isPlaceholderDocument(raw)) {
+  // Placeholder de ceros del largo correcto: válido para altas rápidas
+  if (isPlaceholderDocument(raw, country, type)) {
     const norm = digits(raw);
-    // Conservar largo del tipo si viene más corto/largo por edición parcial
     const len = doc.placeholderLen ?? norm.length;
-    const value = norm.padEnd(len, '0').slice(0, Math.max(len, norm.length));
-    if (doc.format && getCountry(country).code === 'CL' && doc.code === 'RUT') {
-      return { ok: true, value: `${value.slice(0, -1) || '00000000'}-0` };
+    const value = norm.length === len ? norm : norm.padEnd(len, '0').slice(0, len);
+    if (getCountry(country).code === 'CL' && doc.code === 'RUT') {
+      return { ok: true, value: `${'0'.repeat(8)}-0` };
     }
     return { ok: true, value };
   }
