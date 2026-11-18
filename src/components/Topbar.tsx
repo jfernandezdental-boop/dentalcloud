@@ -1,4 +1,5 @@
 'use client';
+import { docName } from '@/lib/countries';
 import React, { useState } from 'react';
 import Link from 'next/link';
 import Icon from '@/components/ui/AppIcon';
@@ -40,7 +41,7 @@ export default function Topbar({ onOpenMobile, platformMode = false }: TopbarPro
           />
           <input
             type="search"
-            placeholder="Buscar paciente, cédula o proforma…"
+            placeholder={`Buscar paciente, ${docName().toLowerCase()} o proforma…`}
             aria-label="Búsqueda global"
             className="w-full rounded-lg border border-input bg-muted/50 py-2 pl-10 pr-16 text-sm outline-none transition-colors placeholder:text-muted-foreground focus:border-primary focus:bg-card focus:ring-2 focus:ring-ring/20"
           />

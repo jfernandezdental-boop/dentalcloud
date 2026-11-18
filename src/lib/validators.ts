@@ -1,3 +1,4 @@
+import { validateDocument } from './countries';
 export const EMAIL_PATTERN = /^[a-zA-Z0-9._%+\-]+@[a-zA-Z0-9.\-]+\.[a-zA-Z]{2,}$/;
 export const NAME_PATTERN = /^[A-Za-z\u00C0-\u024F][A-Za-z\u00C0-\u024F'.\- ]*$/;
 export const MOBILE_PATTERN = /^09\d{8}$/;
@@ -137,6 +138,14 @@ export const rules = {
       return country === 'CL'
         ? 'RUT chileno no valido'
         : 'Cedula ecuatoriana no valida: revisa los 10 digitos';
+    },
+  }),
+  /** Documento según país y tipo (ver countries.ts). */
+  document: (getCountry: () => string, getType: () => string) => ({
+    required: 'El documento de identidad es obligatorio',
+    validate: (val: string) => {
+      const r = validateDocument(getCountry(), getType(), val);
+      return r.ok || r.error;
     },
   }),
   ruc: () => ({

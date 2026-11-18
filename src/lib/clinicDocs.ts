@@ -1,3 +1,4 @@
+import { money as moneyActive, docName } from '@/lib/countries';
 import { printHtml } from './print';
 
 /**
@@ -52,7 +53,7 @@ export type RxDocInput = {
 
 const esc = (s: unknown) =>
   String(s ?? '').replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
-const usd = (n: number) => '$' + (Number(n) || 0).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+const usd = (n: number) => moneyActive(Number(n) || 0);
 
 /** 'YYYY-MM-DD' → 'DD/MM/YYYY'; cualquier otro texto se deja igual. */
 export function fmtDocDate(d: string | null | undefined): string {
@@ -150,7 +151,7 @@ function patientBox(p: DocPatient): string {
   return `
   <div class="pbox">
     <div><span>Paciente</span><b>${esc(p.name)}</b></div>
-    <div><span>Cédula</span><b>${esc(p.cedula || '—')}</b></div>
+    <div><span>${esc(docName())}</span><b>${esc(p.cedula || '—')}</b></div>
     <div><span>HC N.º</span><b>${esc(p.hc || '—')}</b></div>
     <div><span>Edad / Sexo</span><b>${esc(ageSex(p))}</b></div>
   </div>`;

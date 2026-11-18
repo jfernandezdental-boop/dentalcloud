@@ -1,3 +1,4 @@
+import { money as moneyActive } from '@/lib/countries';
 const DEFAULT_CSS = `  @page { size: letter; margin: 18mm 16mm; }
   * { box-sizing: border-box; }
   body {
@@ -138,5 +139,5 @@ ${bodyHtml}
 
 export function moneyFmt(n: number): string {
   const v = Number(n) || 0;
-  return v.toLocaleString('es-EC', { style: 'currency', currency: 'USD' });
+  return moneyActive(v);
 }

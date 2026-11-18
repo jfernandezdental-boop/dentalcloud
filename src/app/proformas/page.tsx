@@ -1,4 +1,5 @@
 'use client';
+import { docName, getActiveCountry, primaryDoc, validateDocument } from '@/lib/countries';
 import React, { useCallback, useEffect, useMemo, useState } from 'react';
 import AppLayout from '@/components/AppLayout';
 import Badge from '@/components/ui/Badge';
@@ -244,7 +245,9 @@ export default function ProformasPage() {
   async function acceptAndRegister() {
     if (!acceptFor || !user?.clinicId) return;
     if (!reg.first_name.trim() || !reg.last_name.trim()) return setToast('Nombre y apellido son obligatorios.');
-    if (!reg.cedula.trim()) return setToast('La cédula es obligatoria al aceptar.');
+    if (!reg.cedula.trim()) return setToast(`Ingresa el documento (${docName()}) para aceptar.`);
+    const docCheck = validateDocument(getActiveCountry(), primaryDoc().code, reg.cedula);
+    if (!docCheck.ok) return setToast(docCheck.error);
     setSaving(true);
     const sb = getSupabase();
     const { data: patient, error: pe } = await sb
@@ -253,7 +256,9 @@ export default function ProformasPage() {
         clinic_id: user.clinicId,
         first_name: reg.first_name.trim(),
         last_name: reg.last_name.trim(),
-        cedula: reg.cedula.trim(),
+        cedula: docCheck.value,
+        id_country: getActiveCountry(),
+        id_type: primaryDoc().code,
         phone: reg.phone.trim() || null,
         email: reg.email.trim() || null,
         active: true,
@@ -531,7 +536,7 @@ export default function ProformasPage() {
           <div className="grid gap-3 sm:grid-cols-2">
             <Field label="Nombre *"><input className={fld} value={reg.first_name} onChange={(e) => setReg({ ...reg, first_name: e.target.value })} /></Field>
             <Field label="Apellido *"><input className={fld} value={reg.last_name} onChange={(e) => setReg({ ...reg, last_name: e.target.value })} /></Field>
-            <Field label="Cédula *"><input className={fld} value={reg.cedula} onChange={(e) => setReg({ ...reg, cedula: e.target.value })} /></Field>
+            <Field label={`${docName()} *`}><input className={fld} value={reg.cedula} onChange={(e) => setReg({ ...reg, cedula: e.target.value })} /></Field>
             <Field label="Teléfono"><input className={fld} value={reg.phone} onChange={(e) => setReg({ ...reg, phone: e.target.value })} /></Field>
             <Field label="Email" className="sm:col-span-2"><input className={fld} value={reg.email} onChange={(e) => setReg({ ...reg, email: e.target.value })} /></Field>
           </div>

@@ -1,4 +1,5 @@
 'use client';
+import { money } from '@/lib/countries';
 import React, { useMemo, useState } from 'react';
 import { useAuth } from '@/components/AuthProvider';
 import Badge from '@/components/ui/Badge';
@@ -109,15 +110,15 @@ export default function FinanceModule() {
       <div className="grid gap-3 sm:grid-cols-3">
         <div className="rounded-xl border border-border p-3">
           <p className="text-xs text-muted-foreground">Ingresos</p>
-          <p className="text-lg font-bold tabular-nums text-success">${income.toFixed(2)}</p>
+          <p className="text-lg font-bold tabular-nums text-success">{money(income)}</p>
         </div>
         <div className="rounded-xl border border-border p-3">
           <p className="text-xs text-muted-foreground">Gastos</p>
-          <p className="text-lg font-bold tabular-nums text-destructive">${expense.toFixed(2)}</p>
+          <p className="text-lg font-bold tabular-nums text-destructive">{money(expense)}</p>
         </div>
         <div className="rounded-xl border border-border p-3">
           <p className="text-xs text-muted-foreground">Balance</p>
-          <p className="text-lg font-bold tabular-nums">${(income - expense).toFixed(2)}</p>
+          <p className="text-lg font-bold tabular-nums">{money(income - expense)}</p>
         </div>
       </div>
 
@@ -145,7 +146,7 @@ export default function FinanceModule() {
                   <td className="px-3 py-2.5 font-medium">{r.concept}</td>
                   <td className="px-3 py-2.5">{r.party}</td>
                   <td className="px-3 py-2.5">{r.method}</td>
-                  <td className="px-3 py-2.5 tabular-nums font-semibold">${r.amount.toFixed(2)}</td>
+                  <td className="px-3 py-2.5 tabular-nums font-semibold">{money(r.amount)}</td>
                   <td className="px-3 py-2.5">
                     <Badge tone={statusTone[r.status]}>{r.status}</Badge>
                   </td>

@@ -1,4 +1,5 @@
 'use client';
+import { docName } from '@/lib/countries';
 import React, { useCallback, useEffect, useMemo, useState } from 'react';
 import Modal from '@/components/ui/Modal';
 import Badge from '@/components/ui/Badge';
@@ -228,7 +229,7 @@ export default function RealAgenda() {
       >
         {form && (
           <div className="grid gap-3 sm:grid-cols-2">
-            <Field label="Buscar paciente (nombre o cédula)" className="sm:col-span-2">
+            <Field label={`Buscar paciente (nombre o ${docName().toLowerCase()})`} className="sm:col-span-2">
               <input className={fld} value={pq} onChange={(e) => setPq(e.target.value)} placeholder="Escribe para filtrar…" />
             </Field>
             <Field label="Paciente" required className="sm:col-span-2">

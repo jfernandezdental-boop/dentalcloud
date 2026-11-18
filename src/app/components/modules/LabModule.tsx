@@ -1,4 +1,5 @@
 'use client';
+import { docName } from '@/lib/countries';
 import React, { useCallback, useEffect, useMemo, useState } from 'react';
 import Badge from '@/components/ui/Badge';
 import Icon from '@/components/ui/AppIcon';
@@ -323,7 +324,7 @@ export default function LabModule() {
             <label className="mb-1 block text-sm font-semibold">Paciente *</label>
             <input
               className="mb-2 w-full rounded-lg border px-3 py-2 text-sm"
-              placeholder="Buscar por nombre o cedula..."
+              placeholder={`Buscar por nombre o ${docName().toLowerCase()}...`}
               value={patientQuery}
               onChange={(e) => setPatientQuery(e.target.value)}
             />

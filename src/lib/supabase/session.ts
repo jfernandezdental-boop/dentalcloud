@@ -1,3 +1,4 @@
+import { setActiveCountry } from '@/lib/countries';
 import { getSupabase } from './client';
 import { normalizeRole, type AppRole, ROLE_LABEL } from './roles';
 
@@ -11,6 +12,9 @@ export type SessionUser = {
   clinicName: string | null;
   clinicCity: string | null;
   clinicPlan: string | null;
+  /** País ISO-2 de la clínica (define moneda y documentos). */
+  clinicCountry: string | null;
+  clinicCurrency: string | null;
   /**
    * true SOLO para la clínica de demostración de la plataforma.
    * Cualquier clínica creada (p. ej. Estudio dental Vittoria) es producción → false.
@@ -67,6 +71,8 @@ export async function getSessionUser(): Promise<SessionUser | null> {
   let clinicName: string | null = null;
   let clinicCity: string | null = null;
   let clinicPlan: string | null = null;
+  let clinicCountry: string | null = null;
+  let clinicCurrency: string | null = null;
   let clinicIsDemo = false;
 
   if (!isSuper && profile.clinic_id) {
@@ -78,16 +84,18 @@ export async function getSessionUser(): Promise<SessionUser | null> {
       plan?: string | null;
       msp_code?: string | null;
       is_demo?: boolean | null;
+      country?: string | null;
+      currency_code?: string | null;
     };
     let clinic = null as ClinicRow | null;
 
     const full = await supabase
       .from('clinics')
-      .select('name, city, plan, msp_code, is_demo')
+      .select('name, city, plan, msp_code, is_demo, country, currency_code')
       .eq('id', clinicId)
       .maybeSingle();
 
-    if (full.error && /is_demo/i.test(full.error.message || '')) {
+    if (full.error) {
       const basic = await supabase
         .from('clinics')
         .select('name, city, plan, msp_code')
@@ -102,9 +110,14 @@ export async function getSessionUser(): Promise<SessionUser | null> {
       clinicName = clinic.name ?? null;
       clinicCity = clinic.city ?? null;
       clinicPlan = clinic.plan ?? null;
+      clinicCountry = clinic.country ?? null;
+      clinicCurrency = clinic.currency_code ?? null;
       clinicIsDemo = resolveClinicIsDemo(clinic);
     }
   }
+
+  // Moneda y documentos de toda la interfaz salen del país de esta clínica
+  setActiveCountry(clinicCountry);
 
   return {
     id: user.id,
@@ -116,6 +129,8 @@ export async function getSessionUser(): Promise<SessionUser | null> {
     clinicName,
     clinicCity,
     clinicPlan,
+    clinicCountry,
+    clinicCurrency,
     clinicIsDemo,
   };
 }

@@ -1,4 +1,5 @@
 'use client';
+import { money as moneyActive } from '@/lib/countries';
 import React, { useEffect, useState } from 'react';
 import Badge from '@/components/ui/Badge';
 import EmptyState from '@/components/ui/EmptyState';
@@ -8,7 +9,7 @@ import { getSupabase } from '@/lib/supabase/client';
 type Invoice = { id: string; number: string; issued_at: string | null; total: number | null; paid: number | null; status: string | null };
 type Receipt = { id: string; number: string; date: string | null; method: string | null; concept: string | null; amount: number };
 
-const money = (n: number) => new Intl.NumberFormat('es-EC', { style: 'currency', currency: 'USD' }).format(n);
+const money = (n: number) => moneyActive(n);
 
 /** Facturas y recibos REALES del paciente (RLS de tu clinica). */
 export default function RealPaymentsTab({ patientId }: { patientId: string }) {

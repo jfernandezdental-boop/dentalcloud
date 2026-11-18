@@ -1,4 +1,5 @@
 'use client';
+import { COUNTRY_LIST, getCountry, setActiveCountry } from '@/lib/countries';
 import React, { useCallback, useEffect, useMemo, useState } from 'react';
 import AppLayout from '@/components/AppLayout';
 import Icon from '@/components/ui/AppIcon';
@@ -26,6 +27,7 @@ type Brand = {
   specialty_license: string;
   logo_url: string;
   timezone: string;
+  country: string;
 };
 
 type Proc = { id: string; name: string; price: number | null; active: boolean | null };
@@ -55,6 +57,7 @@ const emptyBrand = (): Brand => ({
   specialty_license: '',
   logo_url: '',
   timezone: 'America/Guayaquil',
+  country: 'EC',
 });
 
 const MED_CATS = ['Analgésico / AINE', 'Antiinflamatorio', 'Antibiótico', 'Antiséptico', 'Anestésico / Otros'];
@@ -69,7 +72,7 @@ const DEFAULT_MEDS: Omit<Med, 'id' | 'active'>[] = [
 ];
 
 export default function ClinicSettingsPage() {
-  const { user } = useAuth();
+  const { user, refresh } = useAuth();
   const [tab, setTab] = useState<Tab>('brand');
   const [brand, setBrand] = useState<Brand>(emptyBrand());
   const [procs, setProcs] = useState<Proc[] | null>(null);
@@ -92,7 +95,7 @@ export default function ClinicSettingsPage() {
     if (!user?.clinicId) return;
     const { data } = await getSupabase()
       .from('clinics')
-      .select('name, phone, mobile, email, address, city, ruc, msp_code, doctor_name, doctor_license, doctor_degree, specialty, specialty_license, logo_url, timezone')
+      .select('name, phone, mobile, email, address, city, ruc, msp_code, doctor_name, doctor_license, doctor_degree, specialty, specialty_license, logo_url, timezone, country')
       .eq('id', user.clinicId)
       .maybeSingle();
     if (data) {
@@ -113,6 +116,7 @@ export default function ClinicSettingsPage() {
         specialty_license: d.specialty_license || '',
         logo_url: d.logo_url || '',
         timezone: d.timezone || 'America/Guayaquil',
+        country: d.country || 'EC',
       });
     } else {
       setBrand((b) => ({ ...b, name: user.clinicName || '', city: user.clinicCity || '' }));
@@ -176,6 +180,8 @@ export default function ClinicSettingsPage() {
       specialty_license: brand.specialty_license.trim() || null,
       logo_url: brand.logo_url.trim() || null,
       timezone: brand.timezone || 'America/Guayaquil',
+      country: brand.country || 'EC',
+      currency_code: getCountry(brand.country).currency,
     };
     // Intento completo; si fallan columnas nuevas, guarda las básicas
     let { error } = await getSupabase().from('clinics').update(payload).eq('id', user.clinicId);
@@ -191,6 +197,8 @@ export default function ClinicSettingsPage() {
     }
     setSaving(false);
     if (error) return setToast(`No se pudo guardar: ${error.message}`);
+    setActiveCountry(brand.country);
+    void refresh();
     setToast('Datos de la clínica guardados. Se usarán en proformas y recetas.');
   }
 
@@ -375,6 +383,16 @@ export default function ClinicSettingsPage() {
                 </Field>
                 <Field label="Ciudad">
                   <input className={fld} value={brand.city} onChange={(e) => setB('city', e.target.value)} />
+                </Field>
+                <Field label="País (moneda y documentos de identidad)">
+                  <select className={fld} value={brand.country} onChange={(e) => setB('country', e.target.value)}>
+                    {COUNTRY_LIST.map((c) => (
+                      <option key={c.code} value={c.code}>
+                        {c.name} — {c.currency}
+                      </option>
+                    ))}
+                  </select>
+                  <p className="mt-1 text-xs text-muted-foreground">Cambia el formato de moneda y los tipos de documento. No convierte los montos ya guardados.</p>
                 </Field>
                 <Field label="Zona horaria">
                   <select className={fld} value={brand.timezone} onChange={(e) => setB('timezone', e.target.value)}>

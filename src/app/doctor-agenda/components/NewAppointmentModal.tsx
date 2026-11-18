@@ -1,4 +1,5 @@
 'use client';
+import { docName } from '@/lib/countries';
 import React, { useEffect, useMemo, useState } from 'react';
 import { useForm } from 'react-hook-form';
 import Modal from '@/components/ui/Modal';
@@ -190,10 +191,10 @@ export default function NewAppointmentModal({
             id="patientSearch"
             type="text"
             className={inputClass(!!errors.patientId)}
-            placeholder="Escribe nombre o cédula para buscar…"
+            placeholder={`Escribe nombre o ${docName().toLowerCase()} para buscar…`}
             value={
               selectedPatient
-                ? `${selectedPatient.name}${selectedPatient.cedula ? ` — C.I. ${selectedPatient.cedula}` : ''}`
+                ? `${selectedPatient.name}${selectedPatient.cedula ? ` — ${docName()} ${selectedPatient.cedula}` : ''}`
                 : pq
             }
             onChange={(e) => {
@@ -222,7 +223,7 @@ export default function NewAppointmentModal({
                       }}
                     >
                       {p.name}
-                      {p.cedula ? ` — C.I. ${p.cedula}` : ''}
+                      {p.cedula ? ` — ${docName()} ${p.cedula}` : ''}
                     </button>
                   </li>
                 ))

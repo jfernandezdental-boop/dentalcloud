@@ -1,3 +1,4 @@
+import { money as moneyActive } from '@/lib/countries';
 export type ToolId =
   | 'caries' |'obturado' |'sellante-necesario' |'sellante-realizado' |'extraccion-indicada' |'perdida-caries' |'perdida-otra' |'endodoncia-por-realizar' |'endodoncia-realizada' |'protesis-fija-indicada' |'protesis-fija-realizada' |'protesis-removible-indicada' |'protesis-removible-realizada' |'protesis-total-indicada' |'protesis-total-realizada' |'corona-indicada' |'corona-realizada' |'ausente' |'borrar';
 
@@ -239,4 +240,4 @@ export function buildBudgetLines(chart: ChartState): BudgetLine[] {
     });
 }
 
-export const formatUsd = (n: number): string => `$${n.toFixed(2)}`;
+export const formatUsd = (n: number): string => moneyActive(n);

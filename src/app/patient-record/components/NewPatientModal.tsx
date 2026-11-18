@@ -1,4 +1,5 @@
 'use client';
+import { COUNTRY_LIST, getCountry, primaryDoc, validateDocument } from '@/lib/countries';
 import React, { useEffect, useState } from 'react';
 import { useForm } from 'react-hook-form';
 import Modal from '@/components/ui/Modal';
@@ -9,6 +10,8 @@ import { rules } from '@/lib/validators';
 export interface NewPatient {
   firstName: string;
   lastName: string;
+  idCountry: string;
+  idType: string;
   cedula: string;
   birthDate: string;
   sex: 'Femenino' | 'Masculino' | 'Otro';
@@ -24,30 +27,45 @@ interface NewPatientModalProps {
   open: boolean;
   onClose: () => void;
   onCreate: (p: NewPatient) => void | Promise<void>;
+  /** País de la clínica: país y tipo de documento por defecto. */
+  defaultCountry?: string;
 }
 
-const defaults: Partial<NewPatient> = { sex: 'Femenino', insurance: 'Particular' };
+const makeDefaults = (country?: string): Partial<NewPatient> => ({
+  sex: 'Femenino',
+  insurance: 'Particular',
+  idCountry: getCountry(country).code,
+  idType: primaryDoc(country).code,
+});
 
-export default function NewPatientModal({ open, onClose, onCreate }: NewPatientModalProps) {
+export default function NewPatientModal({ open, onClose, onCreate, defaultCountry }: NewPatientModalProps) {
   const [saving, setSaving] = useState(false);
   const {
     register,
     handleSubmit,
     reset,
+    watch,
+    setValue,
+    getValues,
+    trigger,
     formState: { errors },
-  } = useForm<NewPatient>({ mode: 'onTouched', defaultValues: defaults });
+  } = useForm<NewPatient>({ mode: 'onTouched', defaultValues: makeDefaults(defaultCountry) });
+  const idCountry = watch('idCountry') || getCountry(defaultCountry).code;
+  const docs = getCountry(idCountry).docs;
+  const docLabel = docs.find((d) => d.code === watch('idType'))?.label || docs[0].label;
 
   useEffect(() => {
     if (open) {
-      reset(defaults);
+      reset(makeDefaults(defaultCountry));
       setSaving(false);
     }
-  }, [open, reset]);
+  }, [open, reset, defaultCountry]);
 
   const submit = async (v: NewPatient) => {
     setSaving(true);
     try {
-      await onCreate({ ...v, firstName: v.firstName.trim(), lastName: v.lastName.trim() });
+      const doc = validateDocument(v.idCountry, v.idType, v.cedula);
+      await onCreate({ ...v, cedula: doc.ok ? doc.value : v.cedula.trim(), firstName: v.firstName.trim(), lastName: v.lastName.trim() });
     } finally {
       setSaving(false);
     }
@@ -104,11 +122,48 @@ export default function NewPatientModal({ open, onClose, onCreate }: NewPatientM
           <FieldError id="lastName" message={errors.lastName?.message} />
         </div>
         <div>
+          <label className="mb-1.5 block text-sm font-semibold">País del documento</label>
+          <select
+            className={inputClass(false)}
+            {...register('idCountry', {
+              onChange: (e) => {
+                setValue('idType', primaryDoc(e.target.value).code);
+                if (getValues('cedula')) void trigger('cedula');
+              },
+            })}
+          >
+            {COUNTRY_LIST.map((c) => (
+              <option key={c.code} value={c.code}>
+                {c.name}
+              </option>
+            ))}
+          </select>
+        </div>
+        <div>
+          <label className="mb-1.5 block text-sm font-semibold">Tipo de documento</label>
+          <select
+            className={inputClass(false)}
+            {...register('idType', { onChange: () => { if (getValues('cedula')) void trigger('cedula'); } })}
+          >
+            {docs.map((d) => (
+              <option key={d.code} value={d.code}>
+                {d.label}
+              </option>
+            ))}
+          </select>
+        </div>
+        <div className="sm:col-span-2">
           <label className="mb-1.5 block text-sm font-semibold">
-            Cedula
+            {docLabel}
             <RequiredMark />
           </label>
-          <input inputMode="numeric" maxLength={10} className={inputClass(!!errors.cedula, 'tabular')} {...register('cedula', rules.cedula())} />
+          <input
+            maxLength={24}
+            autoCapitalize="characters"
+            placeholder={docs.find((d) => d.code === watch('idType'))?.hint}
+            className={inputClass(!!errors.cedula, 'tabular')}
+            {...register('cedula', rules.document(() => getValues('idCountry'), () => getValues('idType')))}
+          />
           <FieldError id="cedula" message={errors.cedula?.message} />
         </div>
         <div>

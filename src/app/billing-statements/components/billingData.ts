@@ -1,3 +1,4 @@
+import { money as moneyActive } from '@/lib/countries';
 export type InvoiceStatus = 'Pagada' | 'Parcial' | 'Pendiente' | 'Vencida';
 
 export interface Invoice {
@@ -67,9 +68,7 @@ export const statusTone: Record<InvoiceStatus, 'success' | 'warning' | 'danger' 
 };
 
 export function money(value: number): string {
-  const fixed = value.toFixed(2);
-  const [int, dec] = fixed.split('.');
-  return `$${int.replace(/\B(?=(\d{3})+(?!\d))/g, '.')},${dec}`;
+  return moneyActive(value);
 }
 
 export function formatDate(iso: string): string {

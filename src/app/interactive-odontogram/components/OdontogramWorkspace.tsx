@@ -1,4 +1,5 @@
 'use client';
+import { docName } from '@/lib/countries';
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import Link from 'next/link';
 import { useSearchParams } from 'next/navigation';
@@ -440,7 +441,7 @@ export default function OdontogramWorkspace() {
         <div className="grid gap-2 sm:grid-cols-[1fr_2fr]">
           <input
             className="rounded-lg border border-input bg-background px-3 py-2 text-sm outline-none focus:border-primary"
-            placeholder="Buscar por nombre o cédula…"
+            placeholder={`Buscar por nombre o ${docName().toLowerCase()}…`}
             value={patientQuery}
             onChange={(e) => setPatientQuery(e.target.value)}
           />

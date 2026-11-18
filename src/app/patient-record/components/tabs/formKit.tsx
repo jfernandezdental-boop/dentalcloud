@@ -1,4 +1,5 @@
 'use client';
+import { money as moneyActive } from '@/lib/countries';
 import React from 'react';
 
 export const fld =
@@ -26,7 +27,7 @@ export function Field({
   );
 }
 
-export const money = (n: number) => new Intl.NumberFormat('es-EC', { style: 'currency', currency: 'USD' }).format(n);
+export const money = (n: number) => moneyActive(n);
 export const today = () => new Date().toLocaleDateString('en-CA'); // YYYY-MM-DD en hora local
 
 export function btnPrimary(disabled?: boolean) {

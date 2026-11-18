@@ -1,11 +1,11 @@
 'use client';
+import { COUNTRY_LIST, getActiveCountry, getCountry, primaryDoc } from '@/lib/countries';
 import React, { useEffect, useState } from 'react';
 import { useForm } from 'react-hook-form';
 import Icon from '@/components/ui/AppIcon';
 import Toast from '@/components/ui/Toast';
 import { FieldError, RequiredMark, RequiredLegend, inputClass, ariaFor } from '@/components/ui/FormField';
 import { rules } from '@/lib/validators';
-import type { IdCountry } from '@/lib/validators';
 import type { RegisterOptions } from 'react-hook-form';
 import type { PatientListItem } from '../PatientListPanel';
 
@@ -13,6 +13,7 @@ interface ProfileValues {
   firstName: string;
   lastName: string;
   idCountry: string;
+  idType: string;
   cedula: string;
   birth: string;
   sex: string;
@@ -36,7 +37,8 @@ function fromPatient(p: PatientListItem): ProfileValues {
   return {
     firstName: p.firstName || '',
     lastName: p.lastName || '',
-    idCountry: 'EC',
+    idCountry: p.idCountry || getActiveCountry(),
+    idType: p.idType || primaryDoc(p.idCountry).code,
     cedula: p.document || '',
     birth: p.birth || '',
     sex: p.sex || 'Femenino',
@@ -69,6 +71,7 @@ export default function ProfileTab({
     handleSubmit,
     reset,
     getValues,
+    setValue,
     trigger,
     watch,
     formState: { errors, isDirty },
@@ -82,7 +85,9 @@ export default function ProfileTab({
     setEditing(false);
   }, [patient.id, patient, reset]);
 
-  const idCountry = (watch('idCountry') || 'EC') as IdCountry;
+  const idCountry = watch('idCountry') || getActiveCountry();
+  const docs = getCountry(idCountry).docs;
+  const docLabel = docs.find((d) => d.code === watch('idType'))?.label || docs[0].label;
 
   const save = async (values: ProfileValues) => {
     setSaving(true);
@@ -215,20 +220,41 @@ export default function ProfileTab({
             className={inputClass(false, disabledCls)}
             {...register('idCountry', {
               required: true,
-              onChange: () => {
+              onChange: (e) => {
+                setValue('idType', primaryDoc(e.target.value).code);
                 if (getValues('cedula')) void trigger('cedula');
               },
             })}
           >
-            <option value="EC">Ecuador — Cedula</option>
-            <option value="CL">Chile — RUT</option>
+            {COUNTRY_LIST.map((c) => (
+              <option key={c.code} value={c.code}>
+                {c.name}
+              </option>
+            ))}
           </select>
         </div>
-        {field('cedula', idCountry === 'CL' ? 'RUT' : 'Cedula de identidad', {
+        <div>
+          <label htmlFor="idType" className="mb-1.5 block text-sm font-semibold">
+            Tipo de documento
+          </label>
+          <select
+            id="idType"
+            disabled={!editing}
+            className={inputClass(false, disabledCls)}
+            {...register('idType', { onChange: () => { if (getValues('cedula')) void trigger('cedula'); } })}
+          >
+            {docs.map((d) => (
+              <option key={d.code} value={d.code}>
+                {d.label}
+              </option>
+            ))}
+          </select>
+        </div>
+        {field('cedula', docLabel, {
           required: true,
-          inputMode: idCountry === 'CL' ? 'text' : 'numeric',
-          maxLength: idCountry === 'CL' ? 12 : 10,
-          rules: rules.nationalId(() => (getValues('idCountry') || 'EC') as IdCountry),
+          inputMode: 'text',
+          maxLength: 24,
+          rules: rules.document(() => getValues('idCountry'), () => getValues('idType')),
         })}
         {field('birth', 'Fecha de nacimiento', { type: 'date', required: true, rules: rules.pastDate('La fecha de nacimiento') })}
         {select('sex', 'Sexo', ['Femenino', 'Masculino', 'Otro'])}

@@ -1,4 +1,6 @@
 'use client';
+import { getActiveCountry, primaryDoc, validateDocument } from '@/lib/countries';
+import { money as moneyActive } from '@/lib/countries';
 import React, { useCallback, useEffect, useMemo, useState } from 'react';
 import Link from 'next/link';
 import Icon from '@/components/ui/AppIcon';
@@ -30,7 +32,7 @@ function fmtDate(iso: string): string {
 }
 
 function fmtMoney(n: number): string {
-  return new Intl.NumberFormat('es-EC', { style: 'currency', currency: 'USD' }).format(n);
+  return moneyActive(n);
 }
 
 function mapPatient(row: Record<string, unknown>): PatientListItem {
@@ -70,6 +72,8 @@ function mapPatient(row: Record<string, unknown>): PatientListItem {
     occupation: String(row.occupation || row.ocupacion || ''),
     civil: String(row.civil_status || row.estado_civil || ''),
     hcNumber: String(row.hc_number || row.hc || row.history_number || ''),
+    idCountry: String(row.id_country || '') || getActiveCountry(),
+    idType: String(row.id_type || '') || primaryDoc(String(row.id_country || '') || undefined).code,
     raw: row,
   };
 }
@@ -223,6 +227,8 @@ export default function PatientRecordWorkspace() {
       first_name: p.firstName.trim(),
       last_name: p.lastName.trim(),
       cedula: p.cedula.trim(),
+      id_country: p.idCountry,
+      id_type: p.idType,
       birth_date: p.birthDate || null,
       sex: p.sex,
       phone: p.phone.trim(),
@@ -249,7 +255,9 @@ export default function PatientRecordWorkspace() {
     const payload: Record<string, unknown> = {
       first_name: values.firstName.trim(),
       last_name: values.lastName.trim(),
-      cedula: values.cedula.trim(),
+      cedula: (() => { const r = validateDocument(values.idCountry, values.idType, values.cedula); return r.ok ? r.value : values.cedula.trim(); })(),
+      id_country: values.idCountry,
+      id_type: values.idType,
       birth_date: values.birth || null,
       sex: values.sex,
       phone: values.phone.trim(),
@@ -396,7 +404,7 @@ export default function PatientRecordWorkspace() {
         )}
       </div>
 
-      <NewPatientModal open={openNew} onClose={() => setOpenNew(false)} onCreate={(p) => void handleCreate(p)} />
+      <NewPatientModal defaultCountry={user?.clinicCountry || undefined} open={openNew} onClose={() => setOpenNew(false)} onCreate={(p) => void handleCreate(p)} />
       {toast ? <Toast message={toast} onDone={() => setToast('')} /> : null}
     </div>
   );

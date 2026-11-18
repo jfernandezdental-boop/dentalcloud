@@ -1,3 +1,4 @@
+import { money as moneyActive } from '@/lib/countries';
 export type StockStatus = 'Agotado' | 'Bajo' | 'Óptimo';
 
 export interface InventoryItem {
@@ -64,9 +65,7 @@ export const statusTone: Record<StockStatus, 'danger' | 'warning' | 'success'> =
 };
 
 export function money(value: number): string {
-  const fixed = value.toFixed(2);
-  const [int, dec] = fixed.split('.');
-  return `$${int.replace(/\B(?=(\d{3})+(?!\d))/g, '.')},${dec}`;
+  return moneyActive(value);
 }
 
 export function formatDate(iso: string): string {

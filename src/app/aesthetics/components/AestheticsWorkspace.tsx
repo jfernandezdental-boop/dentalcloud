@@ -1,4 +1,5 @@
 'use client';
+import { docName } from '@/lib/countries';
 import React, { useCallback, useEffect, useMemo, useState } from 'react';
 import Icon from '@/components/ui/AppIcon';
 import { useAuth } from '@/components/AuthProvider';
@@ -137,7 +138,7 @@ export default function AestheticsWorkspace() {
               />
               <input
                 className="h-9 w-full rounded-lg border border-input bg-background pl-8 pr-2 text-sm"
-                placeholder="Buscar nombre o cédula…"
+                placeholder={`Buscar nombre o ${docName().toLowerCase()}…`}
                 value={query}
                 onChange={(e) => setQuery(e.target.value)}
               />

@@ -1,4 +1,5 @@
 'use client';
+import { docName } from '@/lib/countries';
 import React from 'react';
 import Icon from '@/components/ui/AppIcon';
 
@@ -22,6 +23,8 @@ export type PatientListItem = {
   firstName: string;
   lastName: string;
   hcNumber?: string;
+  idCountry?: string;
+  idType?: string;
   raw: Record<string, unknown>;
 };
 
@@ -57,7 +60,7 @@ export default function PatientListPanel({ patients, selectedId, query, onQuery,
           <input
             value={query}
             onChange={(e) => onQuery(e.target.value)}
-            placeholder="Buscar nombre o cédula..."
+            placeholder={`Buscar nombre o ${docName().toLowerCase()}...`}
             className="w-full rounded-lg border border-input bg-background py-2 pl-9 pr-3 text-sm outline-none focus:border-primary"
           />
         </div>
