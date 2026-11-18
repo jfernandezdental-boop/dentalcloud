@@ -1,5 +1,5 @@
 'use client';
-import { COUNTRY_LIST, getActiveCountry, getCountry, primaryDoc } from '@/lib/countries';
+import { COUNTRY_LIST, getActiveCountry, getCountry, isPlaceholderDocument, placeholderDocument, primaryDoc } from '@/lib/countries';
 import React, { useEffect, useState } from 'react';
 import { useForm } from 'react-hook-form';
 import Icon from '@/components/ui/AppIcon';
@@ -34,12 +34,18 @@ const disabledCls = 'disabled:bg-muted/50 disabled:text-foreground';
 type FieldRules = RegisterOptions<ProfileValues, keyof ProfileValues>;
 
 function fromPatient(p: PatientListItem): ProfileValues {
+  const country = p.idCountry || getActiveCountry();
+  const type = p.idType || primaryDoc(country).code;
+  const doc =
+    p.document && String(p.document).trim()
+      ? String(p.document).trim()
+      : placeholderDocument(country, type);
   return {
     firstName: p.firstName || '',
     lastName: p.lastName || '',
-    idCountry: p.idCountry || getActiveCountry(),
-    idType: p.idType || primaryDoc(p.idCountry).code,
-    cedula: p.document || '',
+    idCountry: country,
+    idType: type,
+    cedula: doc,
     birth: p.birth || '',
     sex: p.sex || 'Femenino',
     civil: p.civil || 'Soltera',
@@ -88,6 +94,7 @@ export default function ProfileTab({
   const idCountry = watch('idCountry') || getActiveCountry();
   const docs = getCountry(idCountry).docs;
   const docLabel = docs.find((d) => d.code === watch('idType'))?.label || docs[0].label;
+  const cedulaVal = watch('cedula');
 
   const save = async (values: ProfileValues) => {
     setSaving(true);
@@ -221,8 +228,15 @@ export default function ProfileTab({
             {...register('idCountry', {
               required: true,
               onChange: (e) => {
-                setValue('idType', primaryDoc(e.target.value).code);
-                if (getValues('cedula')) void trigger('cedula');
+                const nextType = primaryDoc(e.target.value).code;
+                setValue('idType', nextType);
+                // Solo rellenar ceros si estaba vacío o ya era placeholder
+                const cur = getValues('cedula');
+                if (!cur?.trim() || isPlaceholderDocument(cur)) {
+                  setValue('cedula', placeholderDocument(e.target.value, nextType), { shouldValidate: true });
+                } else {
+                  void trigger('cedula');
+                }
               },
             })}
           >
@@ -241,7 +255,16 @@ export default function ProfileTab({
             id="idType"
             disabled={!editing}
             className={inputClass(false, disabledCls)}
-            {...register('idType', { onChange: () => { if (getValues('cedula')) void trigger('cedula'); } })}
+            {...register('idType', {
+              onChange: (e) => {
+                const cur = getValues('cedula');
+                if (!cur?.trim() || isPlaceholderDocument(cur)) {
+                  setValue('cedula', placeholderDocument(getValues('idCountry'), e.target.value), { shouldValidate: true });
+                } else {
+                  void trigger('cedula');
+                }
+              },
+            })}
           >
             {docs.map((d) => (
               <option key={d.code} value={d.code}>
@@ -250,12 +273,26 @@ export default function ProfileTab({
             ))}
           </select>
         </div>
-        {field('cedula', docLabel, {
-          required: true,
-          inputMode: 'text',
-          maxLength: 24,
-          rules: rules.document(() => getValues('idCountry'), () => getValues('idType')),
-        })}
+        <div>
+          <label htmlFor="cedula" className="mb-1.5 block text-sm font-semibold">
+            {docLabel}
+            <RequiredMark required />
+          </label>
+          <input
+            id="cedula"
+            type="text"
+            disabled={!editing}
+            maxLength={24}
+            inputMode="text"
+            className={inputClass(!!errors.cedula, disabledCls)}
+            {...ariaFor('cedula', !!errors.cedula)}
+            {...register('cedula', rules.document(() => getValues('idCountry'), () => getValues('idType')))}
+          />
+          {isPlaceholderDocument(cedulaVal) ? (
+            <p className="mt-1 text-xs text-muted-foreground">Documento temporal en ceros. Edítalo cuando tengas el número real.</p>
+          ) : null}
+          <FieldError id="cedula" message={errors.cedula?.message as string | undefined} />
+        </div>
         {field('birth', 'Fecha de nacimiento', { type: 'date', required: true, rules: rules.pastDate('La fecha de nacimiento') })}
         {select('sex', 'Sexo', ['Femenino', 'Masculino', 'Otro'])}
         {select('civil', 'Estado civil', ['Soltera', 'Casada', 'Divorciada', 'Viuda', 'Union de hecho'])}

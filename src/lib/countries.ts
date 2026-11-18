@@ -18,6 +18,11 @@ export type DocType = {
   check: Check;
   /** Formato canónico para guardar (por defecto: solo dígitos, o mayúsculas sin separadores si lleva letras). */
   format?: (cleaned: string) => string;
+  /**
+   * Longitud del placeholder numérico (ceros) para altas rápidas.
+   * Si no aplica (pasaporte, etc.), se omite y el placeholder queda vacío o genérico.
+   */
+  placeholderLen?: number;
 };
 
 export type Country = {
@@ -164,26 +169,34 @@ const fmt = (re: RegExp, msg: string): Check => (v) => (re.test(clean(v)) ? true
 const pasaporte: DocType = {
   code: 'PASAPORTE', label: 'Pasaporte', hint: 'Letras y números, 5 a 20 caracteres', algorithmic: false,
   check: fmt(/^[A-Z0-9]{5,20}$/, 'Pasaporte inválido (5 a 20 letras o números)'),
+  placeholderLen: 9,
 };
-const d = (code: string, label: string, hint: string, algorithmic: boolean, check: Check): DocType => ({ code, label, hint, algorithmic, check });
+const d = (
+  code: string,
+  label: string,
+  hint: string,
+  algorithmic: boolean,
+  check: Check,
+  placeholderLen?: number,
+): DocType => ({ code, label, hint, algorithmic, check, placeholderLen });
 
 export const COUNTRIES: Record<CountryCode, Country> = {
-  EC: { code: 'EC', name: 'Ecuador', currency: 'USD', locale: 'es-EC', docs: [d('CEDULA', 'Cédula', '10 dígitos', true, ecCedula), d('RUC', 'RUC', '13 dígitos', true, ecRuc), pasaporte] },
-  CL: { code: 'CL', name: 'Chile', currency: 'CLP', locale: 'es-CL', docs: [{ ...d('RUT', 'RUT', '12.345.678-5', true, clRut), format: (x) => `${x.slice(0, -1)}-${x.slice(-1)}` }, pasaporte] },
-  AR: { code: 'AR', name: 'Argentina', currency: 'ARS', locale: 'es-AR', docs: [d('DNI', 'DNI', '7 u 8 dígitos', false, fmt(/^\d{7,8}$/, 'El DNI debe tener 7 u 8 dígitos')), d('CUIT', 'CUIT / CUIL', '20-12345678-6', true, arCuit), pasaporte] },
-  PE: { code: 'PE', name: 'Perú', currency: 'PEN', locale: 'es-PE', docs: [d('DNI', 'DNI', '8 dígitos', false, fmt(/^\d{8}$/, 'El DNI debe tener 8 dígitos')), d('RUC', 'RUC', '11 dígitos', true, peRuc), d('CE', 'Carné de extranjería', '9 a 12 caracteres', false, fmt(/^[A-Z0-9]{9,12}$/, 'Carné inválido')), pasaporte] },
-  CO: { code: 'CO', name: 'Colombia', currency: 'COP', locale: 'es-CO', docs: [d('CC', 'Cédula de ciudadanía', '6 a 10 dígitos', false, fmt(/^\d{6,10}$/, 'La cédula debe tener entre 6 y 10 dígitos')), d('NIT', 'NIT', '899.999.063-3', true, coNit), d('CE', 'Cédula de extranjería', '6 a 7 dígitos', false, fmt(/^\d{6,7}$/, 'Cédula de extranjería inválida')), pasaporte] },
-  MX: { code: 'MX', name: 'México', currency: 'MXN', locale: 'es-MX', docs: [d('CURP', 'CURP', '18 caracteres', true, mxCurp), d('RFC', 'RFC', '12 o 13 caracteres', false, mxRfc), pasaporte] },
-  ES: { code: 'ES', name: 'España', currency: 'EUR', locale: 'es-ES', docs: [d('DNI', 'DNI', '12345678Z', true, esDni), d('NIE', 'NIE', 'X1234567L', true, esNie), pasaporte] },
-  UY: { code: 'UY', name: 'Uruguay', currency: 'UYU', locale: 'es-UY', docs: [d('CI', 'Cédula de identidad', '1.234.567-2', true, uyCi), pasaporte] },
-  BR: { code: 'BR', name: 'Brasil', currency: 'BRL', locale: 'pt-BR', docs: [d('CPF', 'CPF', '111.444.777-35', true, brCpf), d('CNPJ', 'CNPJ', '14 dígitos', true, brCnpj), pasaporte] },
-  BO: { code: 'BO', name: 'Bolivia', currency: 'BOB', locale: 'es-BO', docs: [d('CI', 'Cédula de identidad', '5 a 9 dígitos', false, fmt(/^\d{5,9}[A-Z]?$/, 'Cédula inválida')), pasaporte] },
-  PY: { code: 'PY', name: 'Paraguay', currency: 'PYG', locale: 'es-PY', docs: [d('CI', 'Cédula de identidad', '5 a 8 dígitos', false, fmt(/^\d{5,8}$/, 'Cédula inválida')), pasaporte] },
-  VE: { code: 'VE', name: 'Venezuela', currency: 'VES', locale: 'es-VE', docs: [d('CI', 'Cédula (V/E)', 'V-12345678', false, fmt(/^[VE]?\d{6,9}$/, 'Cédula inválida (ej. V-12345678)')), pasaporte] },
-  PA: { code: 'PA', name: 'Panamá', currency: 'PAB', locale: 'es-PA', docs: [d('CIP', 'Cédula', '8-123-456', false, (v) => (/^(\d{1,2}|PE|E|N)-\d{1,4}-\d{1,6}$/.test(v.replace(/\s/g, '').toUpperCase()) ? true : 'Cédula inválida (ej. 8-123-456)')), pasaporte] },
-  CR: { code: 'CR', name: 'Costa Rica', currency: 'CRC', locale: 'es-CR', docs: [d('CED', 'Cédula', '9 dígitos', false, fmt(/^\d{9}$/, 'La cédula debe tener 9 dígitos')), pasaporte] },
-  GT: { code: 'GT', name: 'Guatemala', currency: 'GTQ', locale: 'es-GT', docs: [d('DPI', 'DPI', '13 dígitos', false, fmt(/^\d{13}$/, 'El DPI debe tener 13 dígitos')), pasaporte] },
-  DO: { code: 'DO', name: 'República Dominicana', currency: 'DOP', locale: 'es-DO', docs: [d('CED', 'Cédula', '11 dígitos', false, fmt(/^\d{11}$/, 'La cédula debe tener 11 dígitos')), pasaporte] },
+  EC: { code: 'EC', name: 'Ecuador', currency: 'USD', locale: 'es-EC', docs: [d('CEDULA', 'Cédula', '10 dígitos', true, ecCedula, 10), d('RUC', 'RUC', '13 dígitos', true, ecRuc, 13), pasaporte] },
+  CL: { code: 'CL', name: 'Chile', currency: 'CLP', locale: 'es-CL', docs: [{ ...d('RUT', 'RUT', '12.345.678-5', true, clRut, 8), format: (x) => `${x.slice(0, -1)}-${x.slice(-1)}` }, pasaporte] },
+  AR: { code: 'AR', name: 'Argentina', currency: 'ARS', locale: 'es-AR', docs: [d('DNI', 'DNI', '7 u 8 dígitos', false, fmt(/^\d{7,8}$/, 'El DNI debe tener 7 u 8 dígitos'), 8), d('CUIT', 'CUIT / CUIL', '20-12345678-6', true, arCuit, 11), pasaporte] },
+  PE: { code: 'PE', name: 'Perú', currency: 'PEN', locale: 'es-PE', docs: [d('DNI', 'DNI', '8 dígitos', false, fmt(/^\d{8}$/, 'El DNI debe tener 8 dígitos'), 8), d('RUC', 'RUC', '11 dígitos', true, peRuc, 11), d('CE', 'Carné de extranjería', '9 a 12 caracteres', false, fmt(/^[A-Z0-9]{9,12}$/, 'Carné inválido'), 9), pasaporte] },
+  CO: { code: 'CO', name: 'Colombia', currency: 'COP', locale: 'es-CO', docs: [d('CC', 'Cédula de ciudadanía', '6 a 10 dígitos', false, fmt(/^\d{6,10}$/, 'La cédula debe tener entre 6 y 10 dígitos'), 10), d('NIT', 'NIT', '899.999.063-3', true, coNit, 10), d('CE', 'Cédula de extranjería', '6 a 7 dígitos', false, fmt(/^\d{6,7}$/, 'Cédula de extranjería inválida'), 7), pasaporte] },
+  MX: { code: 'MX', name: 'México', currency: 'MXN', locale: 'es-MX', docs: [d('CURP', 'CURP', '18 caracteres', true, mxCurp, 18), d('RFC', 'RFC', '12 o 13 caracteres', false, mxRfc, 13), pasaporte] },
+  ES: { code: 'ES', name: 'España', currency: 'EUR', locale: 'es-ES', docs: [d('DNI', 'DNI', '12345678Z', true, esDni, 8), d('NIE', 'NIE', 'X1234567L', true, esNie, 8), pasaporte] },
+  UY: { code: 'UY', name: 'Uruguay', currency: 'UYU', locale: 'es-UY', docs: [d('CI', 'Cédula de identidad', '1.234.567-2', true, uyCi, 8), pasaporte] },
+  BR: { code: 'BR', name: 'Brasil', currency: 'BRL', locale: 'pt-BR', docs: [d('CPF', 'CPF', '111.444.777-35', true, brCpf, 11), d('CNPJ', 'CNPJ', '14 dígitos', true, brCnpj, 14), pasaporte] },
+  BO: { code: 'BO', name: 'Bolivia', currency: 'BOB', locale: 'es-BO', docs: [d('CI', 'Cédula de identidad', '5 a 9 dígitos', false, fmt(/^\d{5,9}[A-Z]?$/, 'Cédula inválida'), 7), pasaporte] },
+  PY: { code: 'PY', name: 'Paraguay', currency: 'PYG', locale: 'es-PY', docs: [d('CI', 'Cédula de identidad', '5 a 8 dígitos', false, fmt(/^\d{5,8}$/, 'Cédula inválida'), 7), pasaporte] },
+  VE: { code: 'VE', name: 'Venezuela', currency: 'VES', locale: 'es-VE', docs: [d('CI', 'Cédula (V/E)', 'V-12345678', false, fmt(/^[VE]?\d{6,9}$/, 'Cédula inválida (ej. V-12345678)'), 8), pasaporte] },
+  PA: { code: 'PA', name: 'Panamá', currency: 'PAB', locale: 'es-PA', docs: [d('CIP', 'Cédula', '8-123-456', false, (v) => (/^(\d{1,2}|PE|E|N)-\d{1,4}-\d{1,6}$/.test(v.replace(/\s/g, '').toUpperCase()) ? true : 'Cédula inválida (ej. 8-123-456)'), 8), pasaporte] },
+  CR: { code: 'CR', name: 'Costa Rica', currency: 'CRC', locale: 'es-CR', docs: [d('CED', 'Cédula', '9 dígitos', false, fmt(/^\d{9}$/, 'La cédula debe tener 9 dígitos'), 9), pasaporte] },
+  GT: { code: 'GT', name: 'Guatemala', currency: 'GTQ', locale: 'es-GT', docs: [d('DPI', 'DPI', '13 dígitos', false, fmt(/^\d{13}$/, 'El DPI debe tener 13 dígitos'), 13), pasaporte] },
+  DO: { code: 'DO', name: 'República Dominicana', currency: 'DOP', locale: 'es-DO', docs: [d('CED', 'Cédula', '11 dígitos', false, fmt(/^\d{11}$/, 'La cédula debe tener 11 dígitos'), 11), pasaporte] },
   US: { code: 'US', name: 'Estados Unidos', currency: 'USD', locale: 'en-US', docs: [pasaporte] },
 };
 
@@ -195,11 +208,70 @@ export function getCountry(code?: string | null): Country {
 
 export type DocResult = { ok: true; value: string } | { ok: false; error: string };
 
+/**
+ * ¿Es un documento placeholder (solo ceros)?
+ * Se usa en altas rápidas: no se trata como error de validación.
+ */
+export function isPlaceholderDocument(raw: string | null | undefined): boolean {
+  const d = digits(String(raw || ''));
+  return d.length >= 5 && /^0+$/.test(d);
+}
+
+/**
+ * Genera el número por defecto (ceros) según país y tipo de documento.
+ * Ej. Ecuador cédula → "0000000000" (10); RUC → 13 ceros; Chile RUT → "00000000-0".
+ */
+export function placeholderDocument(country?: string | null, type?: string | null): string {
+  const c = getCountry(country);
+  const doc = (type && c.docs.find((x) => x.code === type)) || c.docs[0];
+  const len = doc.placeholderLen ?? 10;
+
+  // Chile RUT: cuerpo + dígito verificador 0
+  if (c.code === 'CL' && doc.code === 'RUT') {
+    return `${'0'.repeat(Math.max(7, Math.min(8, len)))}-0`;
+  }
+  // España DNI: 8 ceros + letra (T corresponde a 0)
+  if (c.code === 'ES' && doc.code === 'DNI') {
+    return `${'0'.repeat(8)}T`;
+  }
+  // España NIE: X + 7 ceros + letra
+  if (c.code === 'ES' && doc.code === 'NIE') {
+    return 'X0000000T';
+  }
+  // Panamá CIP formato con guiones
+  if (c.code === 'PA' && doc.code === 'CIP') {
+    return '0-000-000';
+  }
+  // Venezuela con prefijo opcional
+  if (c.code === 'VE' && doc.code === 'CI') {
+    return '0'.repeat(8);
+  }
+  // México CURP/RFC alfanuméricos: ceros numéricos del largo tipico (se aceptan como placeholder)
+  if (c.code === 'MX' && (doc.code === 'CURP' || doc.code === 'RFC')) {
+    return '0'.repeat(len);
+  }
+
+  return '0'.repeat(len);
+}
+
 /** Valida un documento según país y tipo. `value` devuelve el número normalizado para guardar. */
 export function validateDocument(country: string | null | undefined, type: string, raw: string): DocResult {
   const doc = getCountry(country).docs.find((x) => x.code === type);
   if (!doc) return { ok: false, error: 'Tipo de documento no válido para este país' };
   if (!raw?.trim()) return { ok: false, error: 'Ingresa el número de documento' };
+
+  // Placeholder de ceros: válido para altas rápidas (luego se edita el real)
+  if (isPlaceholderDocument(raw)) {
+    const norm = digits(raw);
+    // Conservar largo del tipo si viene más corto/largo por edición parcial
+    const len = doc.placeholderLen ?? norm.length;
+    const value = norm.padEnd(len, '0').slice(0, Math.max(len, norm.length));
+    if (doc.format && getCountry(country).code === 'CL' && doc.code === 'RUT') {
+      return { ok: true, value: `${value.slice(0, -1) || '00000000'}-0` };
+    }
+    return { ok: true, value };
+  }
+
   const r = doc.check(raw);
   if (r !== true) return { ok: false, error: r };
   // Se guarda sin puntos, guiones ni espacios (en mayúsculas si el documento lleva letras)

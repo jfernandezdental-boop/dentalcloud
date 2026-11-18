@@ -1,5 +1,5 @@
 'use client';
-import { COUNTRY_LIST, getCountry, primaryDoc, validateDocument } from '@/lib/countries';
+import { COUNTRY_LIST, getCountry, placeholderDocument, primaryDoc, validateDocument } from '@/lib/countries';
 import React, { useEffect, useState } from 'react';
 import { useForm } from 'react-hook-form';
 import Modal from '@/components/ui/Modal';
@@ -31,12 +31,17 @@ interface NewPatientModalProps {
   defaultCountry?: string;
 }
 
-const makeDefaults = (country?: string): Partial<NewPatient> => ({
-  sex: 'Femenino',
-  insurance: 'Particular',
-  idCountry: getCountry(country).code,
-  idType: primaryDoc(country).code,
-});
+const makeDefaults = (country?: string): Partial<NewPatient> => {
+  const code = getCountry(country).code;
+  const type = primaryDoc(country).code;
+  return {
+    sex: 'Femenino',
+    insurance: 'Particular',
+    idCountry: code,
+    idType: type,
+    cedula: placeholderDocument(code, type),
+  };
+};
 
 export default function NewPatientModal({ open, onClose, onCreate, defaultCountry }: NewPatientModalProps) {
   const [saving, setSaving] = useState(false);
@@ -77,7 +82,7 @@ export default function NewPatientModal({ open, onClose, onCreate, defaultCountr
       onClose={onClose}
       size="lg"
       title="Nuevo paciente"
-      subtitle="Se guarda en la tabla patients de tu clinica."
+      subtitle="Se guarda en la tabla patients de tu clinica. Puedes dejar la cédula en ceros y editarla después."
       footer={
         <>
           <button type="button" onClick={onClose} className="rounded-lg border border-input bg-card px-4 py-2 text-sm font-semibold hover:bg-muted">
@@ -127,8 +132,9 @@ export default function NewPatientModal({ open, onClose, onCreate, defaultCountr
             className={inputClass(false)}
             {...register('idCountry', {
               onChange: (e) => {
-                setValue('idType', primaryDoc(e.target.value).code);
-                if (getValues('cedula')) void trigger('cedula');
+                const nextType = primaryDoc(e.target.value).code;
+                setValue('idType', nextType);
+                setValue('cedula', placeholderDocument(e.target.value, nextType), { shouldValidate: true });
               },
             })}
           >
@@ -143,7 +149,11 @@ export default function NewPatientModal({ open, onClose, onCreate, defaultCountr
           <label className="mb-1.5 block text-sm font-semibold">Tipo de documento</label>
           <select
             className={inputClass(false)}
-            {...register('idType', { onChange: () => { if (getValues('cedula')) void trigger('cedula'); } })}
+            {...register('idType', {
+              onChange: (e) => {
+                setValue('cedula', placeholderDocument(getValues('idCountry'), e.target.value), { shouldValidate: true });
+              },
+            })}
           >
             {docs.map((d) => (
               <option key={d.code} value={d.code}>
@@ -164,6 +174,9 @@ export default function NewPatientModal({ open, onClose, onCreate, defaultCountr
             className={inputClass(!!errors.cedula, 'tabular')}
             {...register('cedula', rules.document(() => getValues('idCountry'), () => getValues('idType')))}
           />
+          <p className="mt-1 text-xs text-muted-foreground">
+            Por defecto va en ceros según el país. Puedes guardar así y completar el número real después.
+          </p>
           <FieldError id="cedula" message={errors.cedula?.message} />
         </div>
         <div>
