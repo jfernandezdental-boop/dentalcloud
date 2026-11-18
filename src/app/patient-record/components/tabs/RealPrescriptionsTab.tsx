@@ -215,24 +215,12 @@ export default function RealPrescriptionsTab({ patientId }: { patientId: string 
     const doctorName = user?.role === 'doctor' ? user.fullName : null;
     const ts = new Date().toISOString();
 
-    for (const it of items) {
-      if (!it.drug.trim()) continue;
-      const payload: Record<string, unknown> = {
-        clinic_id: user.clinicId,
-        patient_id: patientId,
-        date,
-        drug: it.drug.trim(),
-        dose: it.dose.trim() || null,
-        duration: it.duration.trim() || null,
-        indications: [it.indications.trim(), recs.trim()].filter(Boolean).join(' | ') || null,
-        created_at: ts,
-      };
-      if (doctorName) payload.doctor_name = doctorName;
-      if (dx.trim()) payload.diagnosis = dx.trim();
-
-      let { error: e } = await sb.from('prescriptions').insert(payload);
-      if (e && /(doctor_name|diagnosis|column)/i.test(e.message || '')) {
-        const r = await sb.from('prescriptions').insert({
+    // Toda la receta se guarda en una sola operación: antes se insertaba medicamento por medicamento
+    // y un fallo a mitad dejaba la receta incompleta.
+    const rows = items
+      .filter((it) => it.drug.trim())
+      .map((it) => {
+        const row: Record<string, unknown> = {
           clinic_id: user.clinicId,
           patient_id: patientId,
           date,
@@ -240,13 +228,23 @@ export default function RealPrescriptionsTab({ patientId }: { patientId: string 
           dose: it.dose.trim() || null,
           duration: it.duration.trim() || null,
           indications: [it.indications.trim(), recs.trim()].filter(Boolean).join(' | ') || null,
-        });
-        e = r.error;
-      }
-      if (e) {
-        setSaving(false);
-        return setToast(`No se pudo guardar: ${e.message}`);
-      }
+          created_at: ts,
+        };
+        if (doctorName) row.doctor_name = doctorName;
+        if (dx.trim()) row.diagnosis = dx.trim();
+        return row;
+      });
+    let savedWarning = '';
+    let { error: e } = await sb.from('prescriptions').insert(rows);
+    if (e && /(doctor_name|diagnosis)/i.test(e.message || '')) {
+      // Base sin las columnas nuevas: se guarda igual, pero se avisa de lo que no se pudo conservar
+      const plain = rows.map(({ doctor_name: _d, diagnosis: _x, ...rest }) => rest);
+      e = (await sb.from('prescriptions').insert(plain)).error;
+      if (!e) savedWarning = 'Receta emitida, pero el diagnóstico y el nombre del odontólogo no se pudieron guardar.';
+    }
+    if (e) {
+      setSaving(false);
+      return setToast(`No se pudo guardar: ${e.message}`);
     }
     setSaving(false);
     setOpen(false);
@@ -255,7 +253,7 @@ export default function RealPrescriptionsTab({ patientId }: { patientId: string 
     setDx('');
     setQ('');
     setCat('Todos');
-    setToast('Receta emitida.');
+    setToast(savedWarning || 'Receta emitida.');
     load();
   }
 

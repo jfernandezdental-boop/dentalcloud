@@ -183,18 +183,9 @@ export default function ClinicSettingsPage() {
       country: brand.country || 'EC',
       currency_code: getCountry(brand.country).currency,
     };
-    // Intento completo; si fallan columnas nuevas, guarda las básicas
-    let { error } = await getSupabase().from('clinics').update(payload).eq('id', user.clinicId);
-    if (error) {
-      const basic = {
-        name: payload.name,
-        phone: payload.phone,
-        city: payload.city,
-        ruc: payload.ruc,
-        msp_code: payload.msp_code,
-      };
-      ({ error } = await getSupabase().from('clinics').update(basic).eq('id', user.clinicId));
-    }
+    // Un solo guardado completo: si falla, se muestra el error (antes había un respaldo que también fallaba
+    // y, cuando funcionaba, guardaba solo una parte sin avisar).
+    const { error } = await getSupabase().from('clinics').update(payload).eq('id', user.clinicId);
     setSaving(false);
     if (error) return setToast(`No se pudo guardar: ${error.message}`);
     setActiveCountry(brand.country);
@@ -227,7 +218,8 @@ export default function ClinicSettingsPage() {
   }
 
   async function toggleProc(p: Proc) {
-    await getSupabase().from('procedures').update({ active: !p.active }).eq('id', p.id);
+    const { error } = await getSupabase().from('procedures').update({ active: !p.active }).eq('id', p.id);
+    if (error) setToast(`No se pudo cambiar el estado: ${error.message}`);
     loadProcs();
   }
 
@@ -280,7 +272,8 @@ export default function ClinicSettingsPage() {
   }
 
   async function toggleMed(m: Med) {
-    await getSupabase().from('medications').update({ active: !m.active }).eq('id', m.id);
+    const { error } = await getSupabase().from('medications').update({ active: !m.active }).eq('id', m.id);
+    if (error) setToast(`No se pudo cambiar el estado: ${error.message}`);
     loadMeds();
   }
 

@@ -108,29 +108,32 @@ async function ensureDoctorRow(params: {
   active?: boolean;
 }) {
   const sb = getSupabase();
-  const { data: existing } = await sb
+  const { data: existing, error: selErr } = await sb
     .from('doctors')
     .select('id')
     .eq('clinic_id', params.clinicId)
     .eq('profile_id', params.profileId)
     .maybeSingle();
+  if (selErr) throw new Error(selErr.message);
   if (existing?.id) {
-    await sb
+    const { error: upErr } = await sb
       .from('doctors')
       .update({
         full_name: params.fullName,
         active: params.active !== false,
       })
       .eq('id', existing.id);
+    if (upErr) throw new Error(upErr.message);
     return;
   }
-  await sb.from('doctors').insert({
+  const { error: insErr } = await sb.from('doctors').insert({
     clinic_id: params.clinicId,
     profile_id: params.profileId,
     full_name: params.fullName,
     specialty: 'Odontología general',
     active: params.active !== false,
   });
+  if (insErr) throw new Error(insErr.message);
 }
 
 /**
@@ -171,6 +174,7 @@ export async function inviteClinicStaff(input: InviteStaffInput): Promise<{ memb
   if (data?.error) throw new Error(friendlyAuthError(String(data.error)));
 
   const userId = String(data.user_id);
+  let doctorWarning = '';
   if (input.role === 'doctor') {
     try {
       await ensureDoctorRow({
@@ -179,8 +183,9 @@ export async function inviteClinicStaff(input: InviteStaffInput): Promise<{ memb
         fullName: input.fullName.trim(),
         active: true,
       });
-    } catch {
-      /* agenda puede crear el odontologo despues */
+    } catch (e) {
+      // El usuario sí se creó: se avisa en vez de afirmar que ya está en la agenda.
+      doctorWarning = ` Atención: no se pudo registrarlo en la agenda (${e instanceof Error ? e.message : 'error'}). Edítalo y guarda para reintentar.`;
     }
   }
 
@@ -199,7 +204,9 @@ export async function inviteClinicStaff(input: InviteStaffInput): Promise<{ memb
     member,
     message:
       input.role === 'doctor'
-        ? `Odontólogo creado. Ya puede ingresar con ${email} y aparece en la agenda.`
+        ? doctorWarning
+          ? `Odontólogo creado. Ya puede ingresar con ${email}.${doctorWarning}`
+          : `Odontólogo creado. Ya puede ingresar con ${email} y aparece en la agenda.`
         : `Usuario creado. Ya puede ingresar con ${email}.`,
   };
 }
@@ -232,11 +239,12 @@ export async function updateClinicStaff(input: {
     });
   } else {
     // Desactiva fila de doctor si ya no es odontologo
-    await sb
+    const { error: docErr } = await sb
       .from('doctors')
       .update({ active: false })
       .eq('clinic_id', input.clinicId)
       .eq('profile_id', input.id);
+    if (docErr) throw new Error(friendlyAuthError(docErr.message));
   }
 }
 
@@ -255,13 +263,14 @@ export async function setClinicStaffActive(input: {
     .eq('clinic_id', input.clinicId);
   if (error) throw new Error(friendlyAuthError(error.message));
 
-  if (input.role === 'doctor' || input.fullName) {
-    await sb
-      .from('doctors')
-      .update({ active: input.active, ...(input.fullName ? { full_name: input.fullName } : {}) })
-      .eq('clinic_id', input.clinicId)
-      .eq('profile_id', input.id);
-  }
+  // Siempre se sincroniza la fila de doctor (si no existe, no pasa nada): antes, desactivar a un
+  // odontólogo sin indicar el rol lo dejaba activo en la agenda.
+  const { error: docErr } = await sb
+    .from('doctors')
+    .update({ active: input.active, ...(input.fullName ? { full_name: input.fullName } : {}) })
+    .eq('clinic_id', input.clinicId)
+    .eq('profile_id', input.id);
+  if (docErr) throw new Error(friendlyAuthError(docErr.message));
 }
 
 /** Soft-delete: desactiva el perfil (y el doctor si aplica). */

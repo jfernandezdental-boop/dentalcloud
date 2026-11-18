@@ -165,7 +165,13 @@ export default function RealAestheticsTab({ patientId }: { patientId: string }) 
         unit,
       }));
       if (zones.length) {
-        await getSupabase().from('aesthetic_session_zones').insert(zones);
+        const { error: zErr } = await getSupabase().from('aesthetic_session_zones').insert(zones);
+        if (zErr) {
+          // No dejar una sesión sin zonas marcada como guardada
+          await getSupabase().from('aesthetic_sessions').delete().eq('id', data.id);
+          setToast(`No se pudieron guardar las zonas: ${zErr.message}`);
+          return;
+        }
       }
       setOpen(false);
       resetForm();

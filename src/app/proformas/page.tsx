@@ -187,17 +187,22 @@ export default function ProformasPage() {
 
     let budgetId = editing.id;
     let err: string | null = null;
+    let oldLineIds: string[] = [];
+    // Al editar NO se reenvían patient_id, clinic_id ni code: antes, cada edición ponía patient_id en null
+    // y desvinculaba al paciente de una proforma ya aceptada.
+    const { patient_id: _pid, clinic_id: _cid, code: _code, ...updateHeader } = header;
 
     if (budgetId) {
-      let up = await sb.from('budgets').update(header).eq('id', budgetId);
+      let up = await sb.from('budgets').update(updateHeader).eq('id', budgetId);
       if (up.error && /guest_/i.test(up.error.message || '')) {
-        const { guest_name: _g, guest_phone: _p, ...rest } = header;
+        const { guest_name: _g, guest_phone: _p, ...rest } = updateHeader;
         up = await sb.from('budgets').update(rest).eq('id', budgetId);
       }
       err = up.error?.message || null;
       if (!err) {
-        const del = await sb.from('budget_lines').delete().eq('budget_id', budgetId);
-        err = del.error?.message || null;
+        const old = await sb.from('budget_lines').select('id').eq('budget_id', budgetId);
+        err = old.error?.message || null;
+        oldLineIds = (old.data || []).map((r) => String((r as { id: string }).id));
       }
     } else {
       let ins = await sb.from('budgets').insert(header).select('id').maybeSingle();
@@ -233,6 +238,10 @@ export default function ProformasPage() {
         );
       }
       err = linesIns.error?.message || null;
+      if (!err && oldLineIds.length) {
+        const del = await sb.from('budget_lines').delete().in('id', oldLineIds);
+        if (del.error) err = `Se guardaron las líneas nuevas pero no se pudieron quitar las anteriores: ${del.error.message}`;
+      }
       if (err && !editing.id) await sb.from('budgets').delete().eq('id', budgetId);
     }
     setSaving(false);
