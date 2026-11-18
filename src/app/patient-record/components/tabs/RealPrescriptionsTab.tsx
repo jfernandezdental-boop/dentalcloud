@@ -10,10 +10,32 @@ import { btnGhost, btnPrimary, today } from './formKit';
 import { printPrescription } from '@/lib/clinicDocs';
 import { useDocContext } from '@/lib/useDocContext';
 
-type Rx = { id: string; date: string | null; created_at: string | null; drug: string; dose: string | null; duration: string | null; indications: string | null };
+type Rx = {
+  id: string;
+  date: string | null;
+  created_at: string | null;
+  drug: string;
+  dose: string | null;
+  duration: string | null;
+  indications: string | null;
+  doctor_name?: string | null;
+  diagnosis?: string | null;
+};
 
 type Med = { id: string; name: string; dose: string; duration: string; indications: string; category: string };
 type RxItem = { id: string; drug: string; dose: string; duration: string; quantity: string; indications: string };
+
+/** Grupo de medicamentos emitidos juntos (una receta completa). */
+type RxGroup = {
+  key: string;
+  date: string;
+  created_at: string;
+  code: string;
+  doctor: string | null;
+  diagnosis: string | null;
+  recommendations: string | null;
+  items: Rx[];
+};
 
 const CATALOG: Med[] = [
   { id: 'm1', name: 'Ibuprofeno 400 mg tabletas', dose: '1 tableta cada 8 horas', duration: '3 días', indications: 'Tomar con alimentos. Suspender si presenta molestias gástricas.', category: 'Analgésico / AINE' },
@@ -37,6 +59,58 @@ const CATALOG: Med[] = [
 
 const CATEGORIES = ['Todos', 'Analgésico / AINE', 'Antiinflamatorio', 'Antibiótico', 'Antiséptico', 'Anestésico / Otros'];
 
+/** Agrupa filas de prescriptions emitidas juntas (misma fecha y ±2 min de created_at). */
+function groupPrescriptions(rows: Rx[]): RxGroup[] {
+  if (!rows.length) return [];
+  const sorted = [...rows].sort((a, b) => {
+    const da = String(a.date || '');
+    const db = String(b.date || '');
+    if (da !== db) return db.localeCompare(da);
+    return String(b.created_at || '').localeCompare(String(a.created_at || ''));
+  });
+
+  const groups: RxGroup[] = [];
+  const used = new Set<string>();
+
+  for (const r of sorted) {
+    if (used.has(r.id)) continue;
+    const t0 = new Date(r.created_at || 0).getTime();
+    const peers = sorted.filter((x) => {
+      if (used.has(x.id)) return false;
+      if (x.date !== r.date) return false;
+      const t1 = new Date(x.created_at || 0).getTime();
+      return Math.abs(t1 - t0) <= 120_000;
+    });
+    peers.forEach((p) => used.add(p.id));
+    peers.sort((a, b) => String(a.created_at || '').localeCompare(String(b.created_at || '')));
+
+    const parts = peers.map((x) => String(x.indications || '').split(' | '));
+    const last = parts[0]?.[parts[0].length - 1] || '';
+    const common =
+      parts.length > 0 && parts.every((p) => p.length >= 2 && p[p.length - 1] === last) ? last : null;
+
+    const year = String(r.date || '').slice(0, 4) || String(new Date().getFullYear());
+    const code = `RX-${year}-${(peers[0]?.id || r.id).replace(/\D/g, '').slice(-4).toUpperCase().padStart(4, '0')}`;
+
+    groups.push({
+      key: peers.map((p) => p.id).join('-'),
+      date: r.date || today(),
+      created_at: r.created_at || '',
+      code,
+      doctor: r.doctor_name || null,
+      diagnosis: r.diagnosis || null,
+      recommendations: common,
+      items: peers,
+    });
+  }
+  return groups;
+}
+
+function fmtDateLabel(d: string): string {
+  const m = String(d || '').match(/^(\d{4})-(\d{2})-(\d{2})/);
+  return m ? `${m[3]}/${m[2]}/${m[1]}` : d;
+}
+
 export default function RealPrescriptionsTab({ patientId }: { patientId: string }) {
   const { user } = useAuth();
   const doc = useDocContext(patientId);
@@ -47,17 +121,29 @@ export default function RealPrescriptionsTab({ patientId }: { patientId: string 
   const [q, setQ] = useState('');
   const [items, setItems] = useState<RxItem[]>([]);
   const [recs, setRecs] = useState('Dieta blanda, evitar masticar del lado tratado...');
+  const [dx, setDx] = useState('');
   const [saving, setSaving] = useState(false);
   const [toast, setToast] = useState('');
   const [catalog, setCatalog] = useState<Med[]>(CATALOG);
 
   const load = useCallback(async () => {
-    const { data, error: e } = await getSupabase()
+    const sb = getSupabase();
+    let { data, error: e } = await sb
       .from('prescriptions')
-      .select('id, date, created_at, drug, dose, duration, indications')
+      .select('id, date, created_at, drug, dose, duration, indications, doctor_name, diagnosis')
       .eq('patient_id', patientId)
       .order('date', { ascending: false })
       .order('created_at', { ascending: false });
+    if (e) {
+      const retry = await sb
+        .from('prescriptions')
+        .select('id, date, created_at, drug, dose, duration, indications')
+        .eq('patient_id', patientId)
+        .order('date', { ascending: false })
+        .order('created_at', { ascending: false });
+      data = retry.data as typeof data;
+      e = retry.error;
+    }
     if (e) setError('No se pudo cargar el recetario.');
     else {
       setError('');
@@ -97,6 +183,8 @@ export default function RealPrescriptionsTab({ patientId }: { patientId: string 
     loadCatalog();
   }, [load, loadCatalog]);
 
+  const groups = useMemo(() => (rows ? groupPrescriptions(rows) : []), [rows]);
+
   const filtered = useMemo(() => {
     let meds = catalog;
     if (cat !== 'Todos') meds = meds.filter((m) => m.category === cat);
@@ -124,9 +212,12 @@ export default function RealPrescriptionsTab({ patientId }: { patientId: string 
     setSaving(true);
     const sb = getSupabase();
     const date = today();
+    const doctorName = user?.role === 'doctor' ? user.fullName : null;
+    const ts = new Date().toISOString();
+
     for (const it of items) {
       if (!it.drug.trim()) continue;
-      const { error: e } = await sb.from('prescriptions').insert({
+      const payload: Record<string, unknown> = {
         clinic_id: user.clinicId,
         patient_id: patientId,
         date,
@@ -134,7 +225,24 @@ export default function RealPrescriptionsTab({ patientId }: { patientId: string 
         dose: it.dose.trim() || null,
         duration: it.duration.trim() || null,
         indications: [it.indications.trim(), recs.trim()].filter(Boolean).join(' | ') || null,
-      });
+        created_at: ts,
+      };
+      if (doctorName) payload.doctor_name = doctorName;
+      if (dx.trim()) payload.diagnosis = dx.trim();
+
+      let { error: e } = await sb.from('prescriptions').insert(payload);
+      if (e && /(doctor_name|diagnosis|column)/i.test(e.message || '')) {
+        const r = await sb.from('prescriptions').insert({
+          clinic_id: user.clinicId,
+          patient_id: patientId,
+          date,
+          drug: it.drug.trim(),
+          dose: it.dose.trim() || null,
+          duration: it.duration.trim() || null,
+          indications: [it.indications.trim(), recs.trim()].filter(Boolean).join(' | ') || null,
+        });
+        e = r.error;
+      }
       if (e) {
         setSaving(false);
         return setToast(`No se pudo guardar: ${e.message}`);
@@ -144,80 +252,144 @@ export default function RealPrescriptionsTab({ patientId }: { patientId: string 
     setOpen(false);
     setItems([]);
     setRecs('Dieta blanda, evitar masticar del lado tratado...');
+    setDx('');
     setQ('');
     setCat('Todos');
     setToast('Receta emitida.');
     load();
   }
 
-  const printRx = (r: Rx) => {
+  const printGroup = (g: RxGroup) => {
     if (!doc) return setToast('Preparando los datos del documento… intenta de nuevo en un segundo.');
-    const t0 = new Date(r.created_at || 0).getTime();
-    const group = (rows || [])
-      .filter((x) => x.date === r.date && Math.abs(new Date(x.created_at || 0).getTime() - t0) <= 120_000)
-      .sort((a, b) => String(a.created_at || '').localeCompare(String(b.created_at || '')));
-    const list = group.length ? group : [r];
-    const parts = list.map((x) => String(x.indications || '').split(' | '));
-    const last = parts[0]?.[parts[0].length - 1] || '';
-    const common = parts.every((p) => p.length >= 2 && p[p.length - 1] === last) ? last : '';
+
+    const dxMatch = (g.diagnosis || '').match(/^([A-Z]\d{2}(?:\.\d+)?)\s+(.*)$/i);
+
     printPrescription({
-      code: `RX-${String(r.date || '').slice(0, 4) || new Date().getFullYear()}-${(list[0]?.id || r.id).slice(-4).toUpperCase()}`,
-      date: r.date || today(),
+      code: g.code,
+      date: g.date,
       clinic: doc.clinic,
       patient: doc.patient,
-      items: list.map((x, i) => ({
-        name: x.drug,
-        dose: x.dose,
-        duration: x.duration,
-        note: common ? (parts[i] || []).slice(0, -1).join(' | ') : x.indications,
-      })),
-      recommendations: common || null,
-      doctorName: user?.role === 'doctor' ? user.fullName : null,
+      diagnosis: g.diagnosis
+        ? dxMatch
+          ? { code: dxMatch[1], text: dxMatch[2] }
+          : { text: g.diagnosis }
+        : null,
+      items: g.items.map((x, i) => {
+        const parts = String(x.indications || '').split(' | ');
+        const note =
+          g.recommendations && parts.length >= 2 && parts[parts.length - 1] === g.recommendations
+            ? parts.slice(0, -1).join(' | ')
+            : x.indications;
+        return {
+          name: x.drug,
+          dose: x.dose,
+          duration: x.duration,
+          note: note || null,
+        };
+      }),
+      recommendations: g.recommendations,
+      doctorName: g.doctor || (user?.role === 'doctor' ? user.fullName : null),
     });
   };
+
+  const allergyNote =
+    doc?.patient?.allergies &&
+    !/^(ninguna?|no|n\/a|-|—)$/i.test(String(doc.patient.allergies).trim())
+      ? String(doc.patient.allergies).trim()
+      : null;
 
   return (
     <div>
       <div className="mb-4 flex items-center justify-between gap-3">
         <div>
           <h3 className="text-base font-semibold">Recetario</h3>
-          <p className="text-xs text-muted-foreground">Prescripciones emitidas a este paciente. Catálogo editable en Configuración.</p>
+          <p className="text-xs text-muted-foreground">
+            Prescripciones emitidas al paciente.
+            {allergyNote ? (
+              <>
+                {' '}
+                Alergia registrada: <strong className="text-destructive">{allergyNote}</strong>.
+              </>
+            ) : null}{' '}
+            Catálogo editable en Configuración.
+          </p>
         </div>
-        <button type="button" className={btnPrimary()} onClick={() => { setItems([]); setOpen(true); }}>
+        <button
+          type="button"
+          className={btnPrimary()}
+          onClick={() => {
+            setItems([]);
+            setOpen(true);
+          }}
+        >
           <Icon name="PlusIcon" size={16} /> Nueva receta
         </button>
       </div>
 
       {error && <p className="text-sm text-destructive">{error}</p>}
       {!rows && !error && <div className="h-24 animate-pulse rounded-xl bg-muted/40" />}
-      {rows && rows.length === 0 && (
+      {rows && groups.length === 0 && (
         <EmptyState icon={<Icon name="BeakerIcon" size={24} />} title="Sin recetas" description="Pulsa «Nueva receta» para registrar la primera." />
       )}
 
-      <ul className="grid gap-3 sm:grid-cols-2">
-        {rows?.map((r) => (
-          <li key={r.id} className="rounded-xl border border-border bg-card p-4 shadow-sm transition-shadow hover:shadow-md">
-            <div className="flex items-start justify-between gap-2">
-              <div className="min-w-0 flex-1">
-                <p className="text-xs font-medium text-muted-foreground">{r.date}</p>
-                <h4 className="mt-0.5 text-sm font-bold leading-snug">{r.drug}</h4>
-                <p className="mt-1 text-sm text-muted-foreground">
-                  {[r.dose, r.duration].filter(Boolean).join(' · ') || 'Sin dosis registrada'}
+      <ul className="grid gap-3 lg:grid-cols-2">
+        {groups.map((g) => (
+          <li key={g.key} className="rounded-xl border border-border bg-card p-4 shadow-sm transition-shadow hover:shadow-md">
+            <div className="flex items-center justify-between gap-2">
+              <div className="min-w-0">
+                <p className="text-xs font-semibold text-muted-foreground">
+                  <span className="font-mono text-foreground">{g.code}</span>
+                  {' · '}
+                  {fmtDateLabel(g.date)}
+                  {g.doctor ? ` · ${g.doctor}` : ''}
                 </p>
-                {r.indications && (
-                  <p className="mt-2 rounded-lg bg-muted/50 px-3 py-2 text-xs text-muted-foreground">{r.indications}</p>
-                )}
               </div>
               <button
                 type="button"
-                onClick={() => printRx(r)}
-                className="shrink-0 rounded-lg border border-input p-2 text-muted-foreground transition-colors hover:bg-muted hover:text-foreground"
-                aria-label="Imprimir receta"
+                onClick={() => printGroup(g)}
+                className="inline-flex shrink-0 items-center gap-1.5 rounded-lg border border-input px-2.5 py-1.5 text-xs font-semibold text-muted-foreground transition-colors hover:bg-muted hover:text-foreground"
                 title="Imprimir receta completa / PDF"
               >
-                <Icon name="PrinterIcon" size={16} />
+                <Icon name="PrinterIcon" size={14} />
+                Imprimir
               </button>
             </div>
+
+            {g.diagnosis ? (
+              <p className="mt-2 text-xs text-muted-foreground">
+                <span className="font-semibold text-foreground">CIE-10:</span> {g.diagnosis}
+              </p>
+            ) : null}
+
+            <ol className="mt-3 space-y-2">
+              {g.items.map((it, idx) => {
+                const parts = String(it.indications || '').split(' | ');
+                const note =
+                  g.recommendations && parts.length >= 2 && parts[parts.length - 1] === g.recommendations
+                    ? parts.slice(0, -1).join(' | ')
+                    : it.indications;
+                return (
+                  <li key={it.id} className="text-sm">
+                    <div className="flex gap-2">
+                      <span className="mt-0.5 flex h-5 w-5 shrink-0 items-center justify-center rounded-full bg-primary/10 text-[10px] font-bold text-primary">
+                        {idx + 1}
+                      </span>
+                      <div className="min-w-0">
+                        <p className="font-bold leading-snug">{it.drug}</p>
+                        <p className="text-muted-foreground">
+                          {[it.dose, it.duration].filter(Boolean).join(' · ') || 'Sin dosis registrada'}
+                        </p>
+                        {note ? <p className="mt-1 text-xs text-muted-foreground">{note}</p> : null}
+                      </div>
+                    </div>
+                  </li>
+                );
+              })}
+            </ol>
+
+            {g.recommendations ? (
+              <p className="mt-3 rounded-lg bg-muted/50 px-3 py-2 text-xs text-muted-foreground">{g.recommendations}</p>
+            ) : null}
           </li>
         ))}
       </ul>
@@ -230,7 +402,9 @@ export default function RealPrescriptionsTab({ patientId }: { patientId: string 
         subtitle="Elige del catálogo de la clínica. La dosis viene lista y es editable."
         footer={
           <>
-            <button type="button" className={btnGhost} onClick={() => setOpen(false)} disabled={saving}>Cancelar</button>
+            <button type="button" className={btnGhost} onClick={() => setOpen(false)} disabled={saving}>
+              Cancelar
+            </button>
             <button type="button" className={btnPrimary(saving)} onClick={emit} disabled={saving}>
               {saving ? 'Guardando…' : 'Emitir receta'}
             </button>
@@ -265,9 +439,16 @@ export default function RealPrescriptionsTab({ patientId }: { patientId: string 
                 <li key={m.id} className="flex items-start justify-between gap-2 rounded-lg border border-border bg-card px-3 py-2.5">
                   <div className="min-w-0">
                     <p className="text-sm font-semibold">{m.name}</p>
-                    <p className="text-xs text-muted-foreground">{m.dose} · {m.duration}</p>
+                    <p className="text-xs text-muted-foreground">
+                      {m.dose} · {m.duration}
+                    </p>
                   </div>
-                  <button type="button" onClick={() => addMed(m)} className="shrink-0 rounded-full border border-primary p-1 text-primary hover:bg-primary/10" aria-label={`Agregar ${m.name}`}>
+                  <button
+                    type="button"
+                    onClick={() => addMed(m)}
+                    className="shrink-0 rounded-full border border-primary p-1 text-primary hover:bg-primary/10"
+                    aria-label={`Agregar ${m.name}`}
+                  >
                     <Icon name="PlusIcon" size={16} />
                   </button>
                 </li>
@@ -276,12 +457,25 @@ export default function RealPrescriptionsTab({ patientId }: { patientId: string 
           </div>
 
           <div>
+            <p className="mb-1.5 text-sm font-semibold">Diagnóstico (CIE-10) — opcional</p>
+            <input
+              value={dx}
+              onChange={(e) => setDx(e.target.value)}
+              placeholder="Ej. K04.7 Absceso periapical sin fístula"
+              className="mb-4 w-full rounded-lg border border-input bg-background px-3 py-2 text-sm outline-none focus:border-primary"
+            />
+
             <div className="mb-2 flex items-center justify-between">
               <p className="text-sm font-semibold">Receta ({items.length})</p>
               <button
                 type="button"
                 className="text-xs font-semibold text-primary hover:underline"
-                onClick={() => setItems((prev) => [...prev, { id: `it-${Date.now()}`, drug: '', dose: '', duration: '', quantity: '', indications: '' }])}
+                onClick={() =>
+                  setItems((prev) => [
+                    ...prev,
+                    { id: `it-${Date.now()}`, drug: '', dose: '', duration: '', quantity: '', indications: '' },
+                  ])
+                }
               >
                 + Medicamento manual
               </button>
@@ -296,8 +490,15 @@ export default function RealPrescriptionsTab({ patientId }: { patientId: string 
                 {items.map((it, idx) => (
                   <li key={it.id} className="rounded-lg border border-border bg-card p-3">
                     <div className="mb-2 flex items-center gap-2">
-                      <span className="flex h-6 w-6 items-center justify-center rounded-full bg-primary text-xs font-bold text-primary-foreground">{idx + 1}</span>
-                      <input value={it.drug} onChange={(e) => updateItem(it.id, 'drug', e.target.value)} className="min-w-0 flex-1 rounded border border-input bg-background px-2 py-1 text-sm font-semibold outline-none focus:border-primary" placeholder="Medicamento" />
+                      <span className="flex h-6 w-6 items-center justify-center rounded-full bg-primary text-xs font-bold text-primary-foreground">
+                        {idx + 1}
+                      </span>
+                      <input
+                        value={it.drug}
+                        onChange={(e) => updateItem(it.id, 'drug', e.target.value)}
+                        className="min-w-0 flex-1 rounded border border-input bg-background px-2 py-1 text-sm font-semibold outline-none focus:border-primary"
+                        placeholder="Medicamento"
+                      />
                       <button type="button" onClick={() => removeItem(it.id)} className="text-muted-foreground hover:text-destructive" aria-label="Quitar">
                         <Icon name="TrashIcon" size={16} />
                       </button>
@@ -307,14 +508,26 @@ export default function RealPrescriptionsTab({ patientId }: { patientId: string 
                       <input value={it.duration} onChange={(e) => updateItem(it.id, 'duration', e.target.value)} className="rounded border border-input bg-background px-2 py-1 text-xs outline-none focus:border-primary" placeholder="Duración" />
                       <input value={it.quantity} onChange={(e) => updateItem(it.id, 'quantity', e.target.value)} className="rounded border border-input bg-background px-2 py-1 text-xs outline-none focus:border-primary" placeholder="Cantidad total" />
                     </div>
-                    <textarea value={it.indications} onChange={(e) => updateItem(it.id, 'indications', e.target.value)} rows={2} className="w-full rounded border border-input bg-background px-2 py-1 text-xs outline-none focus:border-primary" placeholder="Indicaciones" />
+                    <textarea
+                      value={it.indications}
+                      onChange={(e) => updateItem(it.id, 'indications', e.target.value)}
+                      rows={2}
+                      className="w-full rounded border border-input bg-background px-2 py-1 text-xs outline-none focus:border-primary"
+                      placeholder="Indicaciones"
+                    />
                   </li>
                 ))}
               </ul>
             )}
 
             <p className="mb-1.5 text-sm font-semibold">Recomendaciones generales</p>
-            <textarea value={recs} onChange={(e) => setRecs(e.target.value)} rows={2} className="w-full rounded-lg border border-input bg-background px-3 py-2 text-sm outline-none focus:border-primary" placeholder="Dieta blanda, evitar masticar del lado tratado..." />
+            <textarea
+              value={recs}
+              onChange={(e) => setRecs(e.target.value)}
+              rows={2}
+              className="w-full rounded-lg border border-input bg-background px-3 py-2 text-sm outline-none focus:border-primary"
+              placeholder="Dieta blanda, evitar masticar del lado tratado..."
+            />
           </div>
         </div>
       </Modal>

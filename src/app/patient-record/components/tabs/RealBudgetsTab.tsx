@@ -104,7 +104,7 @@ export default function RealBudgetsTab({ patientId }: { patientId: string }) {
   );
 
   function openNew() {
-    setEditing({ id: null, code: `PRE-${new Date().getFullYear()}-${String(Date.now()).slice(-6)}` });
+    setEditing({ id: null, code: `PRF-${new Date().getFullYear()}-${String(Date.now()).slice(-6)}` });
     setDate(today());
     setStatus('Borrador');
     setPaid('0');
@@ -214,21 +214,17 @@ export default function RealBudgetsTab({ patientId }: { patientId: string }) {
 
   const printOne = (b: Budget) => {
     if (!doc) return setToast('Preparando datos del documento…');
-    const items = b.budget_lines.map((l) => ({
-      piece: l.piece,
-      name: l.procedure,
-      qty: Number(l.qty) || 1,
-      unit: Number(l.unit_price) || 0,
-      discount: Number(l.discount) || 0,
-      total: lineNet(l),
-    }));
     printBudget({
       code: b.code,
       date: b.date || today(),
-      status: b.status,
       clinic: doc.clinic,
       patient: doc.patient,
-      items,
+      lines: b.budget_lines.map((l) => ({
+        piece: l.piece,
+        procedure: l.procedure,
+        qty: Number(l.qty) || 1,
+        unit: Number(l.unit_price) || 0,
+      })),
       paid: Number(b.paid) || 0,
       doctorName: user?.role === 'doctor' ? user.fullName : null,
     });
@@ -239,7 +235,7 @@ export default function RealBudgetsTab({ patientId }: { patientId: string }) {
       <div className="mb-4 flex items-center justify-between gap-3">
         <div>
           <h3 className="text-base font-semibold">Presupuestos</h3>
-          <p className="text-xs text-muted-foreground">Incluye descuento por ítem. Los totales se calculan netos.</p>
+          <p className="text-xs text-muted-foreground">Incluye descuento por ítem. Los totales se calculan netos. PDF profesional listo para imprimir.</p>
         </div>
         <button type="button" className={btnPrimary()} onClick={openNew}>
           <Icon name="PlusIcon" size={16} /> Nuevo presupuesto
@@ -262,8 +258,9 @@ export default function RealBudgetsTab({ patientId }: { patientId: string }) {
                 <span className="text-xs text-muted-foreground">{b.date || ''}</span>
                 {b.status && <Badge>{b.status}</Badge>}
                 <div className="ml-auto flex gap-1">
-                  <button type="button" className={btnGhost} onClick={() => printOne(b)} title="PDF">
+                  <button type="button" className={btnGhost} onClick={() => printOne(b)} title="Imprimir PDF profesional">
                     <Icon name="PrinterIcon" size={14} />
+                    <span className="ml-1 hidden sm:inline">Imprimir</span>
                   </button>
                   <button type="button" className={btnGhost} onClick={() => openEdit(b)}>
                     <Icon name="PencilSquareIcon" size={14} /> Editar
@@ -297,8 +294,16 @@ export default function RealBudgetsTab({ patientId }: { patientId: string }) {
                 </table>
               </div>
               <footer className="flex flex-wrap justify-end gap-4 border-t border-border px-4 py-3 text-sm">
-                <span>Total <strong>{money(t)}</strong></span>
+                <span>
+                  Total <strong>{money(t)}</strong>
+                </span>
                 <span className="text-muted-foreground">Abonado {money(Number(b.paid || 0))}</span>
+                <span>
+                  Saldo{' '}
+                  <strong className={t - Number(b.paid || 0) > 0 ? 'text-destructive' : ''}>
+                    {money(Math.max(0, t - Number(b.paid || 0)))}
+                  </strong>
+                </span>
               </footer>
             </article>
           );
@@ -317,19 +322,29 @@ export default function RealBudgetsTab({ patientId }: { patientId: string }) {
               {discountTotal > 0 && <span className="mr-3 text-muted-foreground">Desc. {money(discountTotal)}</span>}
               Total <strong>{money(total)}</strong>
             </span>
-            <button type="button" className={btnGhost} onClick={() => setEditing(null)} disabled={saving}>Cancelar</button>
-            <button type="button" className={btnPrimary(saving)} onClick={save} disabled={saving}>{saving ? 'Guardando…' : 'Guardar'}</button>
+            <button type="button" className={btnGhost} onClick={() => setEditing(null)} disabled={saving}>
+              Cancelar
+            </button>
+            <button type="button" className={btnPrimary(saving)} onClick={save} disabled={saving}>
+              {saving ? 'Guardando…' : 'Guardar'}
+            </button>
           </>
         }
       >
         <div className="grid gap-3 sm:grid-cols-3">
-          <Field label="Fecha"><input type="date" className={fld} value={date} onChange={(e) => setDate(e.target.value)} /></Field>
+          <Field label="Fecha">
+            <input type="date" className={fld} value={date} onChange={(e) => setDate(e.target.value)} />
+          </Field>
           <Field label="Estado">
             <select className={fld} value={status} onChange={(e) => setStatus(e.target.value)}>
-              {STATUSES.map((s) => <option key={s}>{s}</option>)}
+              {STATUSES.map((s) => (
+                <option key={s}>{s}</option>
+              ))}
             </select>
           </Field>
-          <Field label="Abonado ($)"><input type="number" min="0" step="0.01" className={fld} value={paid} onChange={(e) => setPaid(e.target.value)} /></Field>
+          <Field label="Abonado ($)">
+            <input type="number" min="0" step="0.01" className={fld} value={paid} onChange={(e) => setPaid(e.target.value)} />
+          </Field>
         </div>
 
         <p className="mb-2 mt-4 text-sm font-semibold">Procedimientos</p>
@@ -337,13 +352,43 @@ export default function RealBudgetsTab({ patientId }: { patientId: string }) {
         <div className="space-y-2">
           {lines.map((l, i) => (
             <div key={i} className="grid grid-cols-12 items-end gap-2">
-              <Field label={i === 0 ? 'Pieza' : ''} className="col-span-1"><input className={fld} value={l.piece} onChange={(e) => setLine(i, { piece: e.target.value })} placeholder="46" /></Field>
-              <Field label={i === 0 ? 'Procedimiento *' : ''} className="col-span-4"><input list="proc-catalog" className={fld} value={l.procedure} onChange={(e) => setLine(i, { procedure: e.target.value })} /></Field>
-              <Field label={i === 0 ? 'Cant.' : ''} className="col-span-1"><input type="number" min="1" className={fld} value={l.qty} onChange={(e) => setLine(i, { qty: Number(e.target.value) })} /></Field>
-              <Field label={i === 0 ? 'P. unitario' : ''} className="col-span-2"><input type="number" min="0" step="0.01" className={fld} value={l.unit_price} onChange={(e) => setLine(i, { unit_price: e.target.value === '' ? '' : Number(e.target.value) })} /></Field>
-              <Field label={i === 0 ? 'Desc. %' : ''} className="col-span-2"><input type="number" min="0" max="100" step="1" className={fld} value={l.discount} onChange={(e) => setLine(i, { discount: e.target.value === '' ? '' : Number(e.target.value) })} /></Field>
+              <Field label={i === 0 ? 'Pieza' : ''} className="col-span-1">
+                <input className={fld} value={l.piece} onChange={(e) => setLine(i, { piece: e.target.value })} placeholder="46" />
+              </Field>
+              <Field label={i === 0 ? 'Procedimiento *' : ''} className="col-span-4">
+                <input list="proc-catalog" className={fld} value={l.procedure} onChange={(e) => setLine(i, { procedure: e.target.value })} />
+              </Field>
+              <Field label={i === 0 ? 'Cant.' : ''} className="col-span-1">
+                <input type="number" min="1" className={fld} value={l.qty} onChange={(e) => setLine(i, { qty: Number(e.target.value) })} />
+              </Field>
+              <Field label={i === 0 ? 'P. unitario' : ''} className="col-span-2">
+                <input
+                  type="number"
+                  min="0"
+                  step="0.01"
+                  className={fld}
+                  value={l.unit_price}
+                  onChange={(e) => setLine(i, { unit_price: e.target.value === '' ? '' : Number(e.target.value) })}
+                />
+              </Field>
+              <Field label={i === 0 ? 'Desc. %' : ''} className="col-span-2">
+                <input
+                  type="number"
+                  min="0"
+                  max="100"
+                  step="1"
+                  className={fld}
+                  value={l.discount}
+                  onChange={(e) => setLine(i, { discount: e.target.value === '' ? '' : Number(e.target.value) })}
+                />
+              </Field>
               <div className="col-span-1 mb-2 text-right text-xs font-semibold tabular-nums">{money(lineNet(l))}</div>
-              <button type="button" aria-label="Quitar línea" className="col-span-1 mb-1 rounded-md p-2 text-muted-foreground hover:bg-muted" onClick={() => setLines((ls) => (ls.length > 1 ? ls.filter((_, k) => k !== i) : ls))}>
+              <button
+                type="button"
+                aria-label="Quitar línea"
+                className="col-span-1 mb-1 rounded-md p-2 text-muted-foreground hover:bg-muted"
+                onClick={() => setLines((ls) => (ls.length > 1 ? ls.filter((_, k) => k !== i) : ls))}
+              >
                 <Icon name="TrashIcon" size={16} />
               </button>
             </div>
