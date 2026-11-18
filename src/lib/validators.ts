@@ -1,4 +1,4 @@
-import { validateDocument } from './countries';
+import { isPlaceholderDocument, validateDocument } from './countries';
 export const EMAIL_PATTERN = /^[a-zA-Z0-9._%+\-]+@[a-zA-Z0-9.\-]+\.[a-zA-Z]{2,}$/;
 export const NAME_PATTERN = /^[A-Za-z\u00C0-\u024F][A-Za-z\u00C0-\u024F'.\- ]*$/;
 export const MOBILE_PATTERN = /^09\d{8}$/;
@@ -23,6 +23,7 @@ export function isValidEmail(value: string): boolean {
 }
 
 export function isValidCedula(value: string): boolean {
+  if (isPlaceholderDocument(value)) return true;
   const v = (value || '').trim();
   if (!/^\d{10}$/.test(v)) return false;
   const province = parseInt(v.slice(0, 2), 10);
@@ -45,8 +46,10 @@ export function isValidCedula(value: string): boolean {
 /**
  * RUC Ecuador: 13 digitos (ideal) o 10 (cedula / RUC incompleto en alta).
  * En alta de clinica no bloqueamos si son 10 digitos numericos.
+ * También acepta placeholder en ceros.
  */
 export function isValidRuc(value: string): boolean {
+  if (isPlaceholderDocument(value)) return true;
   const v = onlyDigits(value || '');
   if (/^\d{13}$/.test(v)) {
     const province = parseInt(v.slice(0, 2), 10);
@@ -67,6 +70,7 @@ export function cleanRut(value: string): string {
 }
 
 export function isValidRut(value: string): boolean {
+  if (isPlaceholderDocument(value)) return true;
   const v = cleanRut(value);
   if (!/^\d{7,8}[0-9K]$/.test(v)) return false;
   const body = v.slice(0, -1);
@@ -90,6 +94,7 @@ export function formatRut(value: string): string {
 }
 
 export function isValidNationalId(country: IdCountry, value: string): boolean {
+  if (isPlaceholderDocument(value)) return true;
   return country === 'CL' ? isValidRut(value) : isValidCedula(value);
 }
 
@@ -140,7 +145,7 @@ export const rules = {
         : 'Cedula ecuatoriana no valida: revisa los 10 digitos';
     },
   }),
-  /** Documento según país y tipo (ver countries.ts). */
+  /** Documento según país y tipo (ver countries.ts). Acepta ceros como placeholder. */
   document: (getCountry: () => string, getType: () => string) => ({
     required: 'El documento de identidad es obligatorio',
     validate: (val: string) => {
